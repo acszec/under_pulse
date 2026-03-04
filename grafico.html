@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Gráficos - Under</title>
+  <style>
+    body { margin: 0; background: #111; color: #fff; font-family: Arial; }
+    .wrap { padding: 12px; }
+    h3 { margin: 8px 0 12px; text-align: center; }
+    .card { background:#161616; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+    canvas { background:#0f0f0f; border-radius: 10px; }
+    .note { font-size: 12px; opacity: .75; text-align:center; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h3>Gráficos em tempo real</h3>
+
+    <div class="card">
+      <canvas id="cOdd" height="220"></canvas>
+      <div class="note">Odd ao longo do tempo (a cada captura)</div>
+    </div>
+
+    <div class="card">
+      <canvas id="cPerc" height="220"></canvas>
+      <div class="note">Percentual por minuto (ponto = média do minuto)</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // 🔹 ODD
+    const oddLabels = [];
+    const oddSeries = [];
+
+    // 🔹 Percentual (média por minuto)
+    const percLabels = [];
+    const percSeries = [];
+
+    // acumulador do minuto corrente (percentual)
+    let minutoEmColeta = null;
+    let somaDoMinuto = 0;
+    let qtdDoMinuto = 0;
+
+    // Grid mais visível (principalmente horizontal)
+    const GRID_X = { display: true, color: "rgba(255,255,255,0.10)" };
+    const GRID_Y = { display: true, color: "rgba(255,255,255,0.16)" };
+
+    const cOdd = document.getElementById("cOdd").getContext("2d");
+    const cPerc = document.getElementById("cPerc").getContext("2d");
+
+    function baseOptions() {
+      return {
+        animation: false,
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: "#fff" } }
+        },
+        elements: {
+          point: { radius: 0, hitRadius: 10 },   // linha mais limpa
+          line: { borderWidth: 2 }
+        },
+        scales: {
+          x: { ticks: { color: "#fff" }, grid: GRID_X },
+          y: { ticks: { color: "#fff" }, grid: GRID_Y }
+        }
+      };
+    }
+
+    const chartOdd = new Chart(cOdd, {
+      type: "line",
+      data: {
+        labels: oddLabels,
+        datasets: [{
+          label: "Odd",
+          data: oddSeries,
+          borderColor: "#00ff88",
+          backgroundColor: "rgba(0,255,136,0.15)",
+          tension: 0.2,
+          fill: true
+        }]
+      },
+      options: baseOptions()
+    });
+
+    const chartPerc = new Chart(cPerc, {
+      type: "line",
+      data: {
+        labels: percLabels,
+        datasets: [{
+          label: "Percentual (média por minuto)",
+          data: percSeries,
+          borderColor: "#ffaa00",
+          backgroundColor: "rgba(255,170,0,0.15)",
+          tension: 0.2,
+          fill: true
+        }]
+      },
+      options: baseOptions()
+    });
+
+    function pushOddPoint(label, odd) {
+      oddLabels.push(label);
+      oddSeries.push(Number.isFinite(odd) ? odd : null);
+
+      const MAX = 240;
+      if (oddLabels.length > MAX) { oddLabels.shift(); oddSeries.shift(); }
+      chartOdd.update();
+    }
+
+    function pushPercMeanPoint(minutoLabel, media) {
+      percLabels.push(minutoLabel);
+      percSeries.push(Number.isFinite(media) ? media : null);
+
+      const MAX = 120;
+      if (percLabels.length > MAX) { percLabels.shift(); percSeries.shift(); }
+      chartPerc.update();
+    }
+
+    function fecharMinutoAtualEPlotar() {
+      if (minutoEmColeta === null) return;
+      if (qtdDoMinuto <= 0) return;
+
+      const media = somaDoMinuto / qtdDoMinuto;
+      pushPercMeanPoint(String(minutoEmColeta), media);
+
+      somaDoMinuto = 0;
+      qtdDoMinuto = 0;
+    }
+
+    window.graficoApi.onReset(() => {
+      oddLabels.length = 0; oddSeries.length = 0;
+      percLabels.length = 0; percSeries.length = 0;
+
+      minutoEmColeta = null;
+      somaDoMinuto = 0;
+      qtdDoMinuto = 0;
+
+      chartOdd.update();
+      chartPerc.update();
+    });
+
+    window.graficoApi.onDados((d) => {
+      const label = d.tempo || String(d.minuto ?? "");
+
+      // ODD
+      pushOddPoint(label, (typeof d.odd === "number") ? d.odd : null);
+
+      // Percentual (média por minuto)
+      const minuto = (typeof d.minuto === "number") ? d.minuto : null;
+      const perc = (typeof d.percentual === "number") ? d.percentual : null;
+      if (minuto === null || !Number.isFinite(perc)) return;
+
+      if (minutoEmColeta === null) minutoEmColeta = minuto;
+
+      if (minuto !== minutoEmColeta) {
+        fecharMinutoAtualEPlotar();
+        minutoEmColeta = minuto;
+      }
+
+      somaDoMinuto += perc;
+      qtdDoMinuto += 1;
+    });
+
+    window.addEventListener("beforeunload", () => {
+      fecharMinutoAtualEPlotar();
+    });
+  </script>
+</body>
+</html>

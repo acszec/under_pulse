@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Book de Ofertas - Under</title>
+<style>
+  body{
+    font-family: Arial;
+    background:#0f0f0f;
+    color:#fff;
+    margin:0;
+    padding:14px;
+  }
+  h3{ margin: 0 0 10px 0; text-align:center; }
+
+  .row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .card{
+    background:#171717;
+    border:1px solid #2a2a2a;
+    border-radius:10px;
+    padding:10px 12px;
+    flex:1;
+    min-width:220px;
+  }
+  .k{ font-size:12px; opacity:.75; }
+  .v{ font-size:20px; margin-top:4px; }
+
+  .grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+  }
+  th, td{
+    padding:6px 8px;
+    border-bottom:1px solid #2a2a2a;
+    text-align:right;
+  }
+  th{ opacity:.85; }
+  td:first-child, th:first-child{ text-align:left; }
+
+  /* ✅ cores pedidas */
+  .c-back { color:#fac9d4; }   /* BACK */
+  .c-lay  { color:#a6d8ff; }   /* LAY  */
+
+  .muted{
+    opacity:.75;
+    font-size:12px;
+    text-align:center;
+    margin-top:10px;
+  }
+</style>
+</head>
+<body>
+
+<h3>Book de Ofertas (Under)</h3>
+
+<div class="row">
+  <div class="card">
+    <div class="k">Tempo / Minuto</div>
+    <div class="v" id="tempo">--</div>
+  </div>
+  <div class="card">
+    <div class="k">Odd (last matched)</div>
+    <div class="v" id="odd">--</div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="card">
+    <div class="k">Soma Top (coluna esquerda)</div>
+    <div class="v c-back" id="sumLeft">--</div>
+  </div>
+  <div class="card">
+    <div class="k">Soma Top (coluna direita)</div>
+    <div class="v c-lay" id="sumRight">--</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Odd</th><th>R$ Disp.</th></tr>
+      </thead>
+      <tbody id="tblLeft"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Odd</th><th>R$ Disp.</th></tr>
+      </thead>
+      <tbody id="tblRight"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="muted">
+  * “R$ Disp.” vem do <b>available-amount</b> da API (book de ofertas).
+</div>
+
+<script>
+  function fmt(n){
+    if(n === null || n === undefined) return "--";
+    const x = Number(n);
+    if(!Number.isFinite(x)) return "--";
+    return x.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function renderTable(tbody, rows, cls){
+    tbody.innerHTML = "";
+    (rows || []).forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td class="${cls}">${r.odds}</td><td class="${cls}">${fmt(r.amount)}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ✅ agora escuta book-dados
+  window.volumeApi.onBookDados((d) => {
+    document.getElementById("tempo").innerText = d.tempo ?? "--";
+    document.getElementById("odd").innerText = d.odd ?? "--";
+
+    // esquerda = BACK (cor #fac9d4)
+    document.getElementById("sumLeft").innerText = fmt(d.bookBackSum);
+    renderTable(document.getElementById("tblLeft"), d.bookBacks, "c-back");
+
+    // direita = LAY (cor #a6d8ff)
+    document.getElementById("sumRight").innerText = fmt(d.bookLaySum);
+    renderTable(document.getElementById("tblRight"), d.bookLays, "c-lay");
+  });
+
+  window.volumeApi.onReset(() => {
+    document.getElementById("tempo").innerText = "--";
+    document.getElementById("odd").innerText = "--";
+    document.getElementById("sumLeft").innerText = "--";
+    document.getElementById("sumRight").innerText = "--";
+    document.getElementById("tblLeft").innerHTML = "";
+    document.getElementById("tblRight").innerHTML = "";
+  });
+</script>
+
+</body>
+</html>
