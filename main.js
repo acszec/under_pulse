@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, net, session } = require("electron");
 const path = require("path");
 
 let painel;
@@ -6,6 +6,7 @@ let laybackWindow;
 let tempoWindow;
 let graficoWindow;
 let volumeWindow;
+let homeWindow;
 let intervalId;
 
 let acrescimosGlobal = 5;
@@ -135,6 +136,115 @@ function parseMinutoDoTextoTempo(tempoTxt) {
   return Number.isFinite(minuto) ? minuto : 0;
 }
 
+/**
+ * ✅ Busca JSON usando a session/partition persist:main
+ */
+function requestJsonWithPersistSession(url) {
+  return new Promise((resolve, reject) => {
+    const ses = session.fromPartition("persist:main");
+    const req = net.request({ url, method: "GET", session: ses });
+
+    let raw = "";
+    req.on("response", (res) => {
+      res.on("data", (chunk) => (raw += chunk.toString("utf-8")));
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(raw));
+        } catch (e) {
+          reject(new Error("Falha ao parsear JSON: " + e.message));
+        }
+      });
+    });
+
+    req.on("error", (err) => reject(err));
+    req.end();
+  });
+}
+
+/**
+ * ✅ Detecta se um item está AO VIVO (tolerante)
+ */
+function isInPlay(item) {
+  if (!item || typeof item !== "object") return false;
+
+  const pick = (...keys) => {
+    for (const k of keys) {
+      const v = item?.[k];
+      if (v !== undefined && v !== null) return v;
+    }
+    return undefined;
+  };
+
+  const status = String(pick("status", "state", "matchStatus", "eventStatus", "gameStatus", "phase") ?? "")
+    .toUpperCase();
+
+  const flags = [
+    pick("inplay", "inPlay", "isInPlay", "live", "isLive", "in_play", "inPlayFlag"),
+    pick("is_inplay", "is_live")
+  ];
+
+  const hasTrueFlag = flags.some(v => v === true || v === 1 || v === "1");
+
+  const statusLive = ["IN_PLAY", "INPLAY", "LIVE", "PLAYING", "INPROGRESS", "IN_PROGRESS"].includes(status);
+
+  // fallback: alguns feeds têm clock/timeElapsed preenchido
+  const hasClock = Boolean(pick("clock", "time", "matchTime", "timer", "timeElapsed"));
+
+  return hasTrueFlag || statusLive || hasClock;
+}
+
+/**
+ * ✅ Extrai “itens candidatos” de qualquer JSON (array direto ou aninhado)
+ * - Busca por arrays em chaves comuns e também faz uma varredura leve no objeto
+ */
+function extractCandidateItems(json) {
+  const asArray = (v) => (Array.isArray(v) ? v : []);
+  if (Array.isArray(json)) return json;
+
+  if (!json || typeof json !== "object") return [];
+
+  // chaves comuns (rápido)
+  const direct = [
+    ...asArray(json.inplay),
+    ...asArray(json.inPlay),
+    ...asArray(json.live),
+    ...asArray(json.events),
+    ...asArray(json.data),
+    ...asArray(json.items),
+    ...asArray(json.result),
+    ...asArray(json.matches)
+  ];
+  if (direct.length) return direct;
+
+  // varredura leve (2 níveis) pra achar arrays de objetos
+  const found = [];
+  const visited = new Set();
+
+  const pushIfArray = (v) => {
+    if (Array.isArray(v) && v.length && typeof v[0] === "object") {
+      found.push(...v);
+    }
+  };
+
+  const walk = (obj, depth) => {
+    if (!obj || typeof obj !== "object") return;
+    if (visited.has(obj)) return;
+    visited.add(obj);
+
+    for (const k of Object.keys(obj)) {
+      const v = obj[k];
+      pushIfArray(v);
+      if (depth > 0 && v && typeof v === "object" && !Array.isArray(v)) {
+        walk(v, depth - 1);
+      }
+    }
+  };
+
+  walk(json, 2);
+
+  return found;
+}
+
 function createWindows() {
   // 🔹 JANELA LAYBACK (login)
   laybackWindow = new BrowserWindow({
@@ -157,6 +267,20 @@ function createWindows() {
     }
   });
   attachContextMenu(tempoWindow);
+
+  // 🔹 HOME (jogos ao vivo)
+  homeWindow = new BrowserWindow({
+    width: 980,
+    height: 720,
+    title: "Home — Jogos ao vivo",
+    webPreferences: {
+      preload: path.join(__dirname, "preload_home.js"),
+      contextIsolation: true
+    }
+  });
+  homeWindow.loadFile(path.join(__dirname, "home.html"));
+  homeWindow.on("closed", () => (homeWindow = null));
+  attachContextMenu(homeWindow);
 
   // 🔹 PAINEL PRINCIPAL
   painel = new BrowserWindow({
@@ -191,7 +315,7 @@ function createWindows() {
   graficoWindow.on("closed", () => (graficoWindow = null));
   attachContextMenu(graficoWindow);
 
-  // 🔹 BOOK DE OFERTAS (antes era matched)
+  // 🔹 BOOK DE OFERTAS
   volumeWindow = new BrowserWindow({
     width: 520,
     height: 760,
@@ -209,6 +333,55 @@ function createWindows() {
 app.whenReady().then(() => {
   setupAppMenu();
   createWindows();
+});
+
+/**
+ * ✅ HOME: retornar somente jogos ao vivo
+ * ✅ Correção: home/away e score vêm (na maioria dos casos) dentro de it.score.home / it.score.away
+ */
+ipcMain.handle("home-get-inplay", async () => {
+  const url = "https://bolsadeaposta.bet.br/client/api/jumper/feedSports/inplay-info";
+  const json = await requestJsonWithPersistSession(url);
+
+  const items = extractCandidateItems(json);
+
+  const out = items
+    .filter((it) => {
+      const st = String(it?.status ?? "").toUpperCase();
+      // esse endpoint geralmente vem com status IN_PLAY
+      return st === "IN_PLAY" || isInPlay(it);
+    })
+    .map((it) => {
+      // ✅ prioridade: it.score.home/away
+      const h = it?.score?.home ?? it?.home ?? {};
+      const a = it?.score?.away ?? it?.away ?? {};
+
+      const homeName = String(h?.name ?? "").trim();
+      const awayName = String(a?.name ?? "").trim();
+
+      const homeScore = Number(h?.score ?? 0) || 0;
+      const awayScore = Number(a?.score ?? 0) || 0;
+
+      const id = it?.eventId ?? it?.id ?? it?.event_id ?? null;
+
+      return {
+        id,
+        league:
+          it?.competition?.name ??
+          it?.league?.name ??
+          it?.tournament?.name ??
+          it?.competitionName ??
+          "",
+        clock: it?.timeElapsed ?? it?.clock ?? it?.time ?? it?.matchTime ?? "",
+        home: { name: homeName, score: homeScore },
+        away: { name: awayName, score: awayScore },
+        raw: it
+      };
+    })
+    // evita itens quebrados
+    .filter(x => x.home.name && x.away.name);
+
+  return out;
 });
 
 // 🔹 INICIAR CAPTURA
@@ -401,21 +574,16 @@ function iniciarCaptura(eventId, marketId) {
       lastOdd = oddAtual;
 
       // ============================
-      // ✅ BOOK DE OFERTAS (available-amount) -> volta pro volume.html
-      // IMPORTANTE:
-      // - API "back" e "lay" são OFERTAS DISPONÍVEIS.
-      // - Você quer enxergar do ponto de vista "matched/trader":
-      //   API back => EXIBIR como LAY
-      //   API lay  => EXIBIR como BACK
+      // ✅ BOOK DE OFERTAS (available-amount) -> volume.html
+      // API back => EXIBIR como LAY
+      // API lay  => EXIBIR como BACK
       // ============================
       const prices = Array.isArray(underRunner.prices) ? underRunner.prices : [];
-
       const toNum = (v) => {
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       };
 
-      // pega do book da API
       const apiBacks = prices
         .filter(p => (p.side || "").toLowerCase() === "back")
         .map(p => ({ odds: toNum(p.odds), amount: toNum(p["available-amount"]) }))
@@ -426,26 +594,20 @@ function iniciarCaptura(eventId, marketId) {
         .map(p => ({ odds: toNum(p.odds), amount: toNum(p["available-amount"]) }))
         .filter(x => x.odds !== null && x.amount !== null);
 
-      // ordenação tradicional do book
-      apiBacks.sort((a, b) => b.odds - a.odds); // back: melhor = maior odd
-      apiLays.sort((a, b) => a.odds - b.odds);  // lay:  melhor = menor odd
+      apiBacks.sort((a, b) => b.odds - a.odds);
+      apiLays.sort((a, b) => a.odds - b.odds);
 
       const topApiBacks = apiBacks.slice(0, 12);
       const topApiLays  = apiLays.slice(0, 12);
 
-      // ✅ INVERTE PARA EXIBIÇÃO (ponto de vista trader)
-      // apiBack -> mostrar como LAY
-      // apiLay  -> mostrar como BACK
       const displayLays = topApiBacks.map(x => ({ side: "LAY", odds: x.odds, amount: x.amount }));
       const displayBacks = topApiLays.map(x => ({ side: "BACK", odds: x.odds, amount: x.amount }));
 
-      // ✅ também mando uma lista única (sem “título”), se você quiser renderizar tudo junto
       const bookList = [
         ...displayBacks.map(x => ({ ...x, _sortKey: 0 })),
         ...displayLays.map(x => ({ ...x, _sortKey: 1 }))
       ];
 
-      // (opcional) somas — se você quiser mostrar depois, já fica pronto
       const bookBackSum = displayBacks.reduce((acc, x) => acc + x.amount, 0);
       const bookLaySum  = displayLays.reduce((acc, x) => acc + x.amount, 0);
 
@@ -484,22 +646,16 @@ function iniciarCaptura(eventId, marketId) {
       }
 
       // ============================
-      // ✅ ENVIO: volumeWindow agora é BOOK DE OFERTAS
+      // ENVIO: volumeWindow (book de ofertas)
       // ============================
       if (volumeWindow && !volumeWindow.isDestroyed()) {
         volumeWindow.webContents.send("book-dados", {
           tempo: tempoTxt || null,
           minuto: minutoAtual,
           odd: oddAtual,
-
-          // lista única (sem título)
           bookList,
-
-          // se preferir 2 tabelas no HTML, use essas:
-          bookBacks: displayBacks, // BACK (cor #fac9d4)
-          bookLays: displayLays,   // LAY  (cor #a6d8ff)
-
-          // opcionais
+          bookBacks: displayBacks,
+          bookLays: displayLays,
           bookBackSum,
           bookLaySum
         });

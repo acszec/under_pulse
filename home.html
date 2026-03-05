@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Home - Jogos Ao Vivo</title>
+  <style>
+    body{ margin:0; background:#0f0f0f; color:#fff; font-family: Arial; }
+    .wrap{ padding:14px; }
+    h3{ margin: 6px 0 12px; text-align:center; }
+    .topbar{ display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .pill{ font-size:12px; opacity:.8; padding:6px 10px; border:1px solid #2a2a2a; border-radius:999px; background:#141414; }
+    .list{ display:grid; gap:10px; }
+    .card{
+      background:#171717;
+      border:1px solid #2a2a2a;
+      border-radius:12px;
+      padding:12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+    }
+    .teams{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+    .line{ display:flex; gap:10px; align-items:baseline; }
+    .team{ font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:420px; }
+    .score{ font-size:20px; font-weight:bold; }
+    .meta{ font-size:12px; opacity:.8; }
+    button{
+      cursor:pointer;
+      background:#222;
+      border:1px solid #333;
+      color:#fff;
+      padding:8px 10px;
+      border-radius:10px;
+      min-width:110px;
+    }
+    button:hover{ background:#2a2a2a; }
+    .empty{ opacity:.75; text-align:center; margin-top:22px; }
+    .err{ color:#ff6b6b; margin-top:10px; text-align:center; white-space:pre-wrap; }
+    .ok{ color:#9ae6b4; margin-top:10px; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h3>Jogos ao vivo</h3>
+
+    <div class="topbar">
+      <div class="pill" id="statusPill">Atualizando...</div>
+      <div class="pill" id="countPill">0 jogos</div>
+    </div>
+
+    <div id="list" class="list"></div>
+    <div id="empty" class="empty" style="display:none;">Nenhum jogo ao vivo encontrado.</div>
+    <div id="msg" class="ok" style="display:none;"></div>
+    <div id="err" class="err"></div>
+  </div>
+
+  <script>
+    const listEl = document.getElementById("list");
+    const emptyEl = document.getElementById("empty");
+    const errEl = document.getElementById("err");
+    const msgEl = document.getElementById("msg");
+    const statusPill = document.getElementById("statusPill");
+    const countPill = document.getElementById("countPill");
+
+    function safeStr(x){ return (x === null || x === undefined) ? "" : String(x); }
+    function safeScore(x){
+      const n = Number(x);
+      return Number.isFinite(n) ? String(n) : "0";
+    }
+
+    function setStatus(text){
+      statusPill.innerText = text;
+    }
+
+    function render(games){
+      listEl.innerHTML = "";
+      msgEl.style.display = "none";
+
+      const n = (games || []).length;
+      countPill.innerText = `${n} jogo${n === 1 ? "" : "s"}`;
+
+      if(!n){
+        emptyEl.style.display = "block";
+        return;
+      }
+      emptyEl.style.display = "none";
+
+      for(const g of games){
+        // ✅ agora bate com o seu main.js: { id, league, startTime, clock, home:{name,score}, away:{name,score} }
+        const homeName = safeStr(g?.home?.name);
+        const awayName = safeStr(g?.away?.name);
+
+        const homeScore = safeScore(g?.home?.score);
+        const awayScore = safeScore(g?.away?.score);
+
+        const league = safeStr(g?.league);
+        const clock = safeStr(g?.clock);
+        const startTime = safeStr(g?.startTime);
+        const eventId = safeStr(g?.id);
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const left = document.createElement("div");
+        left.className = "teams";
+        left.innerHTML = `
+          <div class="line">
+            <div class="team">${homeName || "--"}</div>
+            <div class="score">${homeScore}</div>
+          </div>
+          <div class="line">
+            <div class="team">${awayName || "--"}</div>
+            <div class="score">${awayScore}</div>
+          </div>
+          <div class="meta">
+            ${league ? `Liga: ${league} | ` : ""}
+            Tempo: ${clock || "--"} ${startTime ? `| Início: ${startTime} ` : ""}
+            | eventId: ${eventId || "--"}
+          </div>
+        `;
+
+        const btn = document.createElement("button");
+        btn.innerText = "Copiar eventId";
+        btn.addEventListener("click", async () => {
+          try{
+            if (!eventId) return;
+
+            await navigator.clipboard.writeText(eventId);
+            msgEl.innerText = `eventId copiado: ${eventId}`;
+            msgEl.style.display = "block";
+            setTimeout(() => (msgEl.style.display = "none"), 2200);
+          }catch(e){
+            msgEl.innerText = "Falha ao copiar (permissão do clipboard).";
+            msgEl.style.display = "block";
+            setTimeout(() => (msgEl.style.display = "none"), 2200);
+          }
+        });
+
+        card.appendChild(left);
+        card.appendChild(btn);
+        listEl.appendChild(card);
+      }
+    }
+
+    async function refresh(){
+      errEl.innerText = "";
+      setStatus("Atualizando...");
+
+      try{
+        if (!window.homeApi?.getInplay) {
+          throw new Error("homeApi.getInplay não existe (preload_home.js não carregou ou está antigo).");
+        }
+
+        const games = await window.homeApi.getInplay();
+
+        const now = new Date();
+        setStatus(`Atualizado: ${now.toLocaleTimeString("pt-BR")}`);
+        render(Array.isArray(games) ? games : []);
+      }catch(e){
+        setStatus("Erro ao atualizar");
+        errEl.innerText = (e && e.message) ? e.message : String(e);
+        render([]);
+      }
+    }
+
+    // ✅ primeira carga + auto refresh
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>
