@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, net, session } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, net, session, clipboard } = require("electron");
 const path = require("path");
 
 let painel;
@@ -26,6 +26,99 @@ let matchedLayTotal = 0;
 let matchedNeutroTotal = 0;
 
 let matchedByMinute = {}; // { 12: {back, lay, neutro}, ... }
+
+// 🔹 Cache para mercados da home
+const homeMarketCache = new Map();
+const HOME_MARKET_CACHE_TTL_MS = 8000;
+
+// 🔹 ENGINE DE REQUESTS AUTENTICADAS
+const loggedRequestQueue = [];
+let loggedRequestInFlight = 0;
+const MAX_CONCURRENT_LOGGED_REQUESTS = 2;
+
+const loggedRequestCache = new Map();
+const LOGGED_REQUEST_CACHE_TTL_MS = 5000;
+
+const loggedRequestPending = new Map();
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchJsonFromLoggedWindow(url) {
+  if (!laybackWindow || laybackWindow.isDestroyed()) {
+    throw new Error("Janela logada não está disponível.");
+  }
+
+  return await laybackWindow.webContents.executeJavaScript(`
+    fetch(${JSON.stringify(url)}, {
+      credentials: "include"
+    }).then(async (r) => {
+      if (!r.ok) {
+        throw new Error("HTTP " + r.status);
+      }
+      return r.json();
+    })
+  `);
+}
+
+function processLoggedRequestQueue() {
+  while (
+    loggedRequestInFlight < MAX_CONCURRENT_LOGGED_REQUESTS &&
+    loggedRequestQueue.length > 0
+  ) {
+    const job = loggedRequestQueue.shift();
+    loggedRequestInFlight += 1;
+
+    (async () => {
+      try {
+        const data = await fetchJsonFromLoggedWindow(job.url);
+
+        loggedRequestCache.set(job.url, {
+          ts: Date.now(),
+          data
+        });
+
+        job.resolve(data);
+
+        await sleep(120);
+      } catch (err) {
+        job.reject(err);
+      } finally {
+        loggedRequestInFlight -= 1;
+        loggedRequestPending.delete(job.url);
+        processLoggedRequestQueue();
+      }
+    })();
+  }
+}
+
+/**
+ * ✅ Request autenticada com:
+ * - cookies da janela logada
+ * - cache curto
+ * - deduplicação
+ * - fila com concorrência limitada
+ */
+function requestLoggedJson(url) {
+  const cached = loggedRequestCache.get(url);
+  if (cached && (Date.now() - cached.ts) < LOGGED_REQUEST_CACHE_TTL_MS) {
+    return Promise.resolve(cached.data);
+  }
+
+  const pending = loggedRequestPending.get(url);
+  if (pending) {
+    return pending;
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    loggedRequestQueue.push({ url, resolve, reject });
+    processLoggedRequestQueue();
+  });
+
+  loggedRequestPending.set(url, promise);
+  return promise;
+}
 
 /**
  * ✅ Menu cross-platform (com Edit no Windows/Linux p/ garantir colar)
@@ -138,6 +231,7 @@ function parseMinutoDoTextoTempo(tempoTxt) {
 
 /**
  * ✅ Busca JSON usando a session/partition persist:main
+ * Mantida apenas se você quiser usar em endpoints públicos no futuro.
  */
 function requestJsonWithPersistSession(url) {
   return new Promise((resolve, reject) => {
@@ -184,10 +278,7 @@ function isInPlay(item) {
   ];
 
   const hasTrueFlag = flags.some(v => v === true || v === 1 || v === "1");
-
   const statusLive = ["IN_PLAY", "INPLAY", "LIVE", "PLAYING", "INPROGRESS", "IN_PROGRESS"].includes(status);
-
-  // fallback: alguns feeds têm clock/timeElapsed preenchido
   const hasClock = Boolean(pick("clock", "time", "matchTime", "timer", "timeElapsed"));
 
   return hasTrueFlag || statusLive || hasClock;
@@ -195,7 +286,6 @@ function isInPlay(item) {
 
 /**
  * ✅ Extrai “itens candidatos” de qualquer JSON (array direto ou aninhado)
- * - Busca por arrays em chaves comuns e também faz uma varredura leve no objeto
  */
 function extractCandidateItems(json) {
   const asArray = (v) => (Array.isArray(v) ? v : []);
@@ -203,7 +293,6 @@ function extractCandidateItems(json) {
 
   if (!json || typeof json !== "object") return [];
 
-  // chaves comuns (rápido)
   const direct = [
     ...asArray(json.inplay),
     ...asArray(json.inPlay),
@@ -216,7 +305,6 @@ function extractCandidateItems(json) {
   ];
   if (direct.length) return direct;
 
-  // varredura leve (2 níveis) pra achar arrays de objetos
   const found = [];
   const visited = new Set();
 
@@ -241,8 +329,140 @@ function extractCandidateItems(json) {
   };
 
   walk(json, 2);
-
   return found;
+}
+
+function toNumberOrNull(value) {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === "string") {
+    const normalized = value.replace(",", ".").trim();
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * ✅ runner correto do mercado alvo: MENOS DE / UNDER
+ */
+function getUnderRunner(market) {
+  const runners = Array.isArray(market?.runners) ? market.runners : [];
+
+  return runners.find((runner) => {
+    const runnerName = String(runner?.name ?? "").trim().toUpperCase();
+    return runnerName.startsWith("MENOS DE") || runnerName.startsWith("UNDER");
+  }) || null;
+}
+
+function isFirstHalfStatus(inPlayMatchStatus) {
+  return inPlayMatchStatus === "KickOff";
+}
+
+function isSecondHalfStatus(inPlayMatchStatus) {
+  return inPlayMatchStatus === "SecondHalfKickOff" || inPlayMatchStatus === "SecondHalfExtraTimeKickOff";
+}
+
+function marketNameLooksFirstHalf(market) {
+  const name = String(market?.name ?? "").toUpperCase();
+  const original = String(market?.["name-original"] ?? "").toUpperCase();
+  return (
+    name.includes("1º TEMPO") ||
+    name.includes("1O TEMPO") ||
+    name.includes("1ST HALF") ||
+    original.includes("1ST HALF") ||
+    original.includes("1º TEMPO") ||
+    original.includes("1O TEMPO")
+  );
+}
+
+/**
+ * ✅ mercado alvo:
+ * - market-type = total
+ * - status = open
+ * - menor handicap maior que o total de gols
+ * - 1º tempo => usa mercado de 1º tempo
+ * - 2º tempo => usa mercado do jogo inteiro
+ * - mantém volume do runner e também captura volume total do mercado
+ * - captura last-matched-odds do runner
+ * - usa o NAME do runner como nome exibido
+ */
+function getTargetUnderMarket(markets, totalGoals, inPlayMatchStatus) {
+  if (!Array.isArray(markets) || !markets.length) return null;
+
+  const lookingFirstHalf = isFirstHalfStatus(inPlayMatchStatus);
+  const lookingSecondHalf = isSecondHalfStatus(inPlayMatchStatus);
+
+  const candidates = markets
+    .map((market) => {
+      const handicap = toNumberOrNull(market?.handicap);
+      if (handicap === null) return null;
+      if (handicap <= totalGoals) return null;
+
+      const marketType = String(
+        market?.["market-type"] ??
+        market?.marketType ??
+        market?.type ??
+        ""
+      ).toLowerCase();
+
+      if (marketType !== "total") return null;
+
+      const marketStatus = String(market?.status ?? "").toLowerCase();
+      if (marketStatus !== "open") return null;
+
+      const isFirstHalfMarket = marketNameLooksFirstHalf(market);
+
+      if (lookingFirstHalf && !isFirstHalfMarket) return null;
+      if (lookingSecondHalf && isFirstHalfMarket) return null;
+
+      const underRunner = getUnderRunner(market);
+      if (!underRunner) return null;
+
+      return {
+        name: String(underRunner?.name ?? "").trim(),
+        handicap,
+        runnerVolume: toNumberOrNull(underRunner?.volume),
+        marketVolume: toNumberOrNull(market?.volume),
+        lastMatchedOdds: toNumberOrNull(underRunner?.["last-matched-odds"]),
+        raw: market,
+        rawRunner: underRunner
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.handicap - b.handicap);
+
+  return candidates[0] || null;
+}
+
+async function getEventUnderMarketByScore(eventId, totalGoals, inPlayMatchStatus) {
+  if (!eventId) return null;
+
+  const cacheKey = `${eventId}:${totalGoals}:${inPlayMatchStatus || "unknown"}`;
+  const cached = homeMarketCache.get(cacheKey);
+
+  if (cached && (Date.now() - cached.ts) < HOME_MARKET_CACHE_TTL_MS) {
+    return cached.value;
+  }
+
+  try {
+    const url = `https://mexchange-api.bolsadeaposta.bet.br/api/events/${eventId}`;
+    const json = await requestLoggedJson(url);
+    const markets = Array.isArray(json?.markets) ? json.markets : [];
+    const target = getTargetUnderMarket(markets, totalGoals, inPlayMatchStatus);
+
+    homeMarketCache.set(cacheKey, {
+      ts: Date.now(),
+      value: target
+    });
+
+    return target;
+  } catch (err) {
+    console.log(`Erro ao buscar mercado do evento ${eventId}:`, err.message);
+    return null;
+  }
 }
 
 function createWindows() {
@@ -335,24 +555,36 @@ app.whenReady().then(() => {
   createWindows();
 });
 
+ipcMain.handle("home-select-event", async (_event, data) => {
+  try {
+    const eventId = String(data?.eventId ?? "").trim();
+    if (!eventId) return false;
+    clipboard.writeText(eventId);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 /**
  * ✅ HOME: retornar somente jogos ao vivo
- * ✅ Correção: home/away e score vêm (na maioria dos casos) dentro de it.score.home / it.score.away
+ * ✅ inclui mercado alvo de under baseado no total de gols
+ * ✅ 1º tempo usa mercado de 1º tempo
+ * ✅ 2º tempo usa mercado do jogo todo
+ * ✅ nome exibido vem do runner.name
  */
 ipcMain.handle("home-get-inplay", async () => {
   const url = "https://bolsadeaposta.bet.br/client/api/jumper/feedSports/inplay-info";
-  const json = await requestJsonWithPersistSession(url);
+  const json = await requestLoggedJson(url);
 
   const items = extractCandidateItems(json);
 
-  const out = items
+  const baseGames = items
     .filter((it) => {
       const st = String(it?.status ?? "").toUpperCase();
-      // esse endpoint geralmente vem com status IN_PLAY
       return st === "IN_PLAY" || isInPlay(it);
     })
     .map((it) => {
-      // ✅ prioridade: it.score.home/away
       const h = it?.score?.home ?? it?.home ?? {};
       const a = it?.score?.away ?? it?.away ?? {};
 
@@ -363,6 +595,7 @@ ipcMain.handle("home-get-inplay", async () => {
       const awayScore = Number(a?.score ?? 0) || 0;
 
       const id = it?.eventId ?? it?.id ?? it?.event_id ?? null;
+      const inPlayMatchStatus = it?.inPlayMatchStatus ?? it?.inplayMatchStatus ?? "";
 
       return {
         id,
@@ -372,31 +605,56 @@ ipcMain.handle("home-get-inplay", async () => {
           it?.tournament?.name ??
           it?.competitionName ??
           "",
+        startTime: it?.startTime ?? it?.start_time ?? it?.kickoff ?? "",
         clock: it?.timeElapsed ?? it?.clock ?? it?.time ?? it?.matchTime ?? "",
+        inPlayMatchStatus,
         home: { name: homeName, score: homeScore },
         away: { name: awayName, score: awayScore },
         raw: it
       };
     })
-    // evita itens quebrados
-    .filter(x => x.home.name && x.away.name);
+    .filter(x => x.home.name && x.away.name && x.id);
 
-  return out;
+  const gamesWithMarket = await Promise.all(
+    baseGames.map(async (game) => {
+      const totalGoals = (Number(game.home.score) || 0) + (Number(game.away.score) || 0);
+      const targetMarket = await getEventUnderMarketByScore(
+        game.id,
+        totalGoals,
+        game.inPlayMatchStatus
+      );
+
+      return {
+        ...game,
+        lastMatchedOdds: targetMarket?.lastMatchedOdds ?? null,
+        market: targetMarket
+          ? {
+              id: targetMarket.raw?.id ?? null,
+              name: game.inPlayMatchStatus === "KickOff"
+                ? `1º Tempo ${targetMarket.name}`
+                : targetMarket.name,
+              runnerVolume: targetMarket.runnerVolume,
+              marketVolume: targetMarket.marketVolume
+            }
+          : null
+      };
+    })
+  );
+
+  return gamesWithMarket;
 });
 
 // 🔹 INICIAR CAPTURA
 ipcMain.on("iniciar-captura", async (_event, payload) => {
-  const { urlOdds, urlTempo, acrescimos, tempoBase } = payload;
+  const { eventId, marketId, urlTempo, acrescimos, tempoBase } = payload;
 
   acrescimosGlobal = parseInt(acrescimos, 10) || 5;
   tempoBaseGlobal = parseInt(tempoBase, 10) || 90;
 
-  // reset percentuais
   historicoPorMinuto = {};
   historicoPercentual = [];
   ultimoPercentual = null;
 
-  // reset matched flow
   lastRunnerVolume = null;
   lastOdd = null;
   matchedBackTotal = 0;
@@ -407,14 +665,19 @@ ipcMain.on("iniciar-captura", async (_event, payload) => {
   if (graficoWindow && !graficoWindow.isDestroyed()) graficoWindow.webContents.send("grafico-reset");
   if (volumeWindow && !volumeWindow.isDestroyed()) volumeWindow.webContents.send("book-reset");
 
-  const ids = (urlOdds || "").match(/\d{10,}/g);
-  if (!ids || ids.length < 2) {
-    if (painel && !painel.isDestroyed()) painel.webContents.send("erro", "Não foi possível extrair eventId e marketId.");
+  if (!eventId || !marketId) {
+    if (painel && !painel.isDestroyed()) {
+      painel.webContents.send("erro", "Informe event_id e market_id para iniciar a captura.");
+    }
     return;
   }
 
-  const eventId = ids[0];
-  const marketId = ids[1];
+  if (!urlTempo) {
+    if (painel && !painel.isDestroyed()) {
+      painel.webContents.send("erro", "Informe a URL do tempo para iniciar a captura.");
+    }
+    return;
+  }
 
   await tempoWindow.loadURL(urlTempo);
   iniciarCaptura(eventId, marketId);
@@ -431,14 +694,12 @@ function iniciarCaptura(eventId, marketId) {
   intervalId = setInterval(async () => {
     try {
       const [data, tempoTxt] = await Promise.all([
-        // 🔹 ODDS + runner.volume via API
         laybackWindow.webContents.executeJavaScript(`
           fetch("https://mexchange-api.bolsadeaposta.bet.br/api/events/${eventId}?market-ids=${marketId}&price-depth=350", {
             credentials: "include"
           }).then(r => r.json())
         `),
 
-        // 🔹 TEMPO via XPath (com fallback em iframes same-origin)
         tempoWindow.webContents.executeJavaScript(`
           (function(){
             const XPATH = "//div[@class='clockWrapper']/span[@data-push='clock']/text()";
@@ -459,15 +720,12 @@ function iniciarCaptura(eventId, marketId) {
               }
             }
 
-            // 1) tenta no documento principal
             let t = xpathToString(document);
             if (t) return Promise.resolve(t);
 
-            // 2) fallback antigo (.eventTime)
             const a = document.querySelector(".eventTime");
             if (a && a.innerText) return Promise.resolve(a.innerText.trim());
 
-            // 3) tenta iframes same-origin
             const iframes = Array.from(document.querySelectorAll("iframe"));
             for (const f of iframes) {
               try {
@@ -497,9 +755,6 @@ function iniciarCaptura(eventId, marketId) {
       const oddSemPonto = Math.round(oddAtual * 100);
       const minutoAtual = parseMinutoDoTextoTempo(tempoTxt);
 
-      // ============================
-      // ✅ PERCENTUAL POR MINUTO (sua fórmula)
-      // ============================
       const divisor = (tempoBaseGlobal + acrescimosGlobal) - minutoAtual;
       const tempoRestante = divisor;
 
@@ -529,9 +784,6 @@ function iniciarCaptura(eventId, marketId) {
       }
       ultimoPercentual = percentualPorMinuto;
 
-      // ============================
-      // ✅ MATCHED FLOW (Caminho A - estimado) -> continua pros gráficos
-      // ============================
       const runnerVolume = Number(underRunner.volume);
       const runnerVolumeOk = Number.isFinite(runnerVolume) ? runnerVolume : null;
 
@@ -573,11 +825,6 @@ function iniciarCaptura(eventId, marketId) {
       }
       lastOdd = oddAtual;
 
-      // ============================
-      // ✅ BOOK DE OFERTAS (available-amount) -> volume.html
-      // API back => EXIBIR como LAY
-      // API lay  => EXIBIR como BACK
-      // ============================
       const prices = Array.isArray(underRunner.prices) ? underRunner.prices : [];
       const toNum = (v) => {
         const n = Number(v);
@@ -611,9 +858,6 @@ function iniciarCaptura(eventId, marketId) {
       const bookBackSum = displayBacks.reduce((acc, x) => acc + x.amount, 0);
       const bookLaySum  = displayLays.reduce((acc, x) => acc + x.amount, 0);
 
-      // ============================
-      // ENVIO: painel
-      // ============================
       if (painel && !painel.isDestroyed()) {
         painel.webContents.send("atualizar-dados", {
           odd: oddAtual,
@@ -626,9 +870,6 @@ function iniciarCaptura(eventId, marketId) {
         });
       }
 
-      // ============================
-      // ENVIO: gráficos (matched estimado)
-      // ============================
       if (graficoWindow && !graficoWindow.isDestroyed()) {
         graficoWindow.webContents.send("grafico-dados", {
           tempo: tempoTxt || null,
@@ -636,7 +877,6 @@ function iniciarCaptura(eventId, marketId) {
           odd: oddAtual,
           percentual: percentualPorMinuto,
           tempoRestante,
-
           deltaMatched,
           tickBack, tickLay, tickNeutro,
           matchedBackTotal,
@@ -645,9 +885,6 @@ function iniciarCaptura(eventId, marketId) {
         });
       }
 
-      // ============================
-      // ENVIO: volumeWindow (book de ofertas)
-      // ============================
       if (volumeWindow && !volumeWindow.isDestroyed()) {
         volumeWindow.webContents.send("book-dados", {
           tempo: tempoTxt || null,

@@ -3,54 +3,632 @@
 <head>
   <meta charset="utf-8" />
   <title>Home - Jogos Ao Vivo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body{ margin:0; background:#0f0f0f; color:#fff; font-family: Arial; }
-    .wrap{ padding:14px; }
-    h3{ margin: 6px 0 12px; text-align:center; }
-    .topbar{ display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom:12px; }
-    .pill{ font-size:12px; opacity:.8; padding:6px 10px; border:1px solid #2a2a2a; border-radius:999px; background:#141414; }
-    .list{ display:grid; gap:10px; }
-    .card{
-      background:#171717;
-      border:1px solid #2a2a2a;
-      border-radius:12px;
-      padding:12px;
+    :root{
+      --bg:#0b0b0b;
+      --cardTop:#1c1c1c;
+      --cardBottom:#151515;
+
+      --border:rgba(255,255,255,.10);
+      --borderStrong:rgba(255,255,255,.14);
+
+      --muted:rgba(255,255,255,.75);
+      --muted2:rgba(255,255,255,.55);
+
+      --accent:#00ff88;
+      --ok:#9ae6b4;
+      --danger:#ff6b6b;
+
+      --homeTint: rgba(0,255,136,.20);
+      --awayTint: rgba(166,216,255,.22);
+
+      /* odd no topo */
+      --oddBg: rgba(255, 20, 147, .16);
+      --oddBorder: rgba(255, 20, 147, .42);
+      --oddText: #ff66c4;
+
+      --marketBg: rgba(255,255,255,.05);
+      --marketBorder: rgba(255,255,255,.10);
+      --marketLabel: rgba(255,255,255,.62);
+      --marketValue: #ffffff;
+
+      --minuteText: rgba(255,255,255,.88);
+
+      --hotCardTop: rgba(40,52,33,.88);
+      --hotCardBottom: rgba(27,35,24,.95);
+      --hotBorder: rgba(151,255,140,.26);
+      --hotGlow: rgba(151,255,140,.10);
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 600px at 20% -10%, rgba(0,255,136,.08), transparent 60%),
+        radial-gradient(900px 500px at 110% 10%, rgba(166,216,255,.08), transparent 60%),
+        var(--bg);
+      color:#fff;
+      font-family: Arial, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+
+    .wrap{ padding:14px; max-width:1100px; margin:0 auto; }
+
+    .header{
+      position: sticky;
+      top:0;
+      z-index:10;
+      background: linear-gradient(to bottom, rgba(11,11,11,.98), rgba(11,11,11,.86));
+      backdrop-filter: blur(8px);
+      border-bottom:1px solid var(--border);
+    }
+    .headerInner{
+      max-width:1100px;
+      margin:0 auto;
+      padding:12px 14px;
       display:flex;
-      justify-content:space-between;
       align-items:center;
+      justify-content:space-between;
       gap:12px;
     }
-    .teams{ display:flex; flex-direction:column; gap:4px; min-width:0; }
-    .line{ display:flex; gap:10px; align-items:baseline; }
-    .team{ font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:420px; }
-    .score{ font-size:20px; font-weight:bold; }
-    .meta{ font-size:12px; opacity:.8; }
+    .titleBox{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      min-width:0;
+    }
+    .title{
+      font-size:16px;
+      font-weight:900;
+      letter-spacing:.2px;
+      margin:0;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .subtitle{
+      font-size:12px;
+      color:var(--muted2);
+      margin:0;
+    }
+    .pills{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .toolbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+      flex-wrap:wrap;
+    }
+
+    .searchBox{
+      flex:1 1 320px;
+      min-width:260px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+    }
+
+    .searchIcon{
+      font-size:14px;
+      opacity:.78;
+      flex:0 0 auto;
+    }
+
+    .searchInput{
+      width:100%;
+      background: transparent;
+      border:0;
+      outline:none;
+      color:#fff;
+      font-size:14px;
+    }
+
+    .searchInput::placeholder{
+      color: rgba(255,255,255,.45);
+    }
+
+    .pill{
+      font-size:12px;
+      color:var(--muted);
+      padding:6px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background: rgba(16,16,16,.85);
+      white-space:nowrap;
+    }
+    .filter{
+      cursor:pointer;
+      transition: all .15s ease;
+    }
+
+    .filter.active[data-filter="all"],
+    .filter.active[data-filter="first"]{
+      background: rgba(255,20,147,.18);
+      border-color: rgba(255,20,147,.45);
+      color:#ff66c4;
+    }
+
+    .filter.active[data-filter="second"]{
+      background: rgba(255,170,0,.10);
+      border-color: rgba(255,170,0,.28);
+      color: rgba(255,170,0,.95);
+    }
+
+    .list{
+      display:grid;
+      gap:12px;
+      padding-top:12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items:start;
+    }
+
+    .card{
+      position:relative;
+      border-radius:16px;
+      padding:12px;
+      border:1px solid var(--borderStrong);
+      background: linear-gradient(180deg, var(--cardTop), var(--cardBottom));
+      box-shadow:
+        0 18px 40px rgba(0,0,0,.35),
+        0 1px 0 rgba(255,255,255,.04) inset;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      overflow:hidden;
+      min-height:250px;
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+
+    .card.hot{
+      background: linear-gradient(180deg, var(--hotCardTop), var(--hotCardBottom));
+      border-color: var(--hotBorder);
+      box-shadow:
+        0 18px 40px rgba(0,0,0,.35),
+        0 1px 0 rgba(255,255,255,.04) inset,
+        0 0 0 1px rgba(151,255,140,.05),
+        0 0 20px var(--hotGlow);
+    }
+
+    .card::before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:0;
+      bottom:0;
+      width:6px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.02));
+      opacity:.9;
+    }
+
+    .card.hot::before{
+      background: linear-gradient(180deg, rgba(151,255,140,.45), rgba(151,255,140,.10));
+    }
+
+    .card::after{
+      content:"";
+      position:absolute;
+      inset:-40px -60px auto -60px;
+      height:120px;
+      background: radial-gradient(closest-side, rgba(255,255,255,.06), transparent 70%);
+      pointer-events:none;
+    }
+
+    .cardInner{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-width:0;
+      flex:1 1 auto;
+    }
+
+    .cardHeader{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-start;
+      gap:10px;
+      padding-bottom:10px;
+      border-bottom:1px solid rgba(255,255,255,.07);
+    }
+
+    .league{
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:100%;
+      min-height:14px;
+    }
+
+    .topStatusRow{
+      width:100%;
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:10px;
+    }
+
+    .topLeft{
+      display:flex;
+      justify-content:flex-start;
+      align-items:center;
+      min-width:0;
+    }
+
+    .topCenter{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      min-width:0;
+    }
+
+    .topRight{
+      display:flex;
+      justify-content:flex-end;
+      align-items:center;
+      min-width:0;
+    }
+
+    .badgeLive{
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:.6px;
+      padding:5px 10px;
+      border-radius:999px;
+      background: rgba(0,255,136,.14);
+      border:1px solid rgba(0,255,136,.35);
+      color: var(--accent);
+      display:flex;
+      gap:8px;
+      align-items:center;
+      white-space:nowrap;
+    }
+
+    .pulseDot{
+      width:7px;
+      height:7px;
+      border-radius:999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 0 rgba(0,255,136,.55);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse{
+      0%   { box-shadow: 0 0 0 0 rgba(0,255,136,.45); opacity:1; }
+      70%  { box-shadow: 0 0 0 10px rgba(0,255,136,0); opacity:.9; }
+      100% { box-shadow: 0 0 0 0 rgba(0,255,136,0); opacity:1; }
+    }
+
+    .oddBadge{
+      font-size:12px;
+      font-weight:900;
+      padding:6px 10px;
+      border-radius:999px;
+      background: var(--oddBg);
+      border:1px solid var(--oddBorder);
+      color: var(--oddText);
+      display:flex;
+      gap:8px;
+      align-items:center;
+      letter-spacing:.2px;
+      box-shadow:
+        0 0 0 1px rgba(255,20,147,.08) inset,
+        0 0 14px rgba(255,20,147,.12);
+      white-space:nowrap;
+    }
+    .oddIcon{
+      width:16px;
+      height:16px;
+      border-radius:999px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(0,0,0,.22);
+      border:1px solid rgba(255,20,147,.24);
+      font-size:11px;
+      opacity:1;
+      color: var(--oddText);
+    }
+
+    .halfBadge{
+      font-size:12px;
+      font-weight:1000;
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(166,216,255,.10);
+      border:1px solid rgba(166,216,255,.28);
+      color: rgba(166,216,255,.95);
+      letter-spacing:.2px;
+      white-space:nowrap;
+      text-align:center;
+    }
+    .halfBadge.first{
+      background: rgba(202, 26, 202, 0.1);
+      border-color: rgba(216, 15, 153, 0.26);
+      color: rgba(217, 33, 186, 0.95);
+    }
+    .halfBadge.second{
+      background: rgba(255,170,0,.10);
+      border-color: rgba(255,170,0,.28);
+      color: rgba(255,170,0,.95);
+    }
+
+    .scoreboard{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap:12px;
+      align-items:center;
+    }
+
+    .teamCol{
+      min-width:0;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .teamRow{
+      position:relative;
+      min-width:0;
+      padding:10px 12px;
+      border-radius:14px;
+      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.08);
+      display:flex;
+      align-items:center;
+      gap:10px;
+      overflow:hidden;
+    }
+
+    .teamRow.home::before,
+    .teamRow.away::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      opacity:.65;
+    }
+    .teamRow.home::before{ background: linear-gradient(90deg, var(--homeTint), transparent 55%); }
+    .teamRow.away::before{ background: linear-gradient(90deg, var(--awayTint), transparent 55%); }
+
+    .dot{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      flex:0 0 auto;
+      background: rgba(255,255,255,.25);
+      position:relative;
+      z-index:1;
+    }
+    .dot.home{ background: rgba(0,255,136,.70); }
+    .dot.away{ background: rgba(166,216,255,.85); }
+
+    .teamName{
+      position:relative;
+      z-index:1;
+      font-size:14px;
+      color:#fff;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .midScore{
+      position:relative;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:10px 12px;
+      border-radius:16px;
+      background: rgba(0,0,0,.26);
+      border:1px solid rgba(255,255,255,.10);
+      min-width:120px;
+      overflow:hidden;
+    }
+
+    .bigScore{
+      font-size:30px;
+      font-weight:1000;
+      letter-spacing:.5px;
+      line-height:1;
+    }
+
+    .smallMeta{
+      font-size:13px;
+      font-weight:800;
+      color:var(--minuteText);
+      margin-top:10px;
+      text-align:center;
+      white-space:nowrap;
+      min-height:18px;
+      letter-spacing:.2px;
+    }
+
+    .card.hot .smallMeta{
+      color: rgba(230,255,227,.94);
+    }
+
+    .marketBox{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap:8px;
+      margin-top:2px;
+    }
+
+    .marketItem{
+      background: var(--marketBg);
+      border:1px solid var(--marketBorder);
+      border-radius:12px;
+      padding:8px 10px;
+      min-width:0;
+    }
+
+    .marketLabel{
+      font-size:11px;
+      color: var(--marketLabel);
+      margin-bottom:4px;
+    }
+
+    .marketValue{
+      font-size:13px;
+      font-weight:800;
+      color: var(--marketValue);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .goalFlash{ animation: goalFlash 850ms ease-out; }
+    @keyframes goalFlash{
+      0%   { background: rgba(0,255,136,.18); border-color: rgba(0,255,136,.45); }
+      35%  { background: rgba(0,255,136,.10); }
+      100% { background: rgba(0,0,0,.26); border-color: rgba(255,255,255,.10); }
+    }
+
+    .goalChip{
+      position:absolute;
+      top:8px;
+      right:8px;
+      font-size:10px;
+      font-weight:1000;
+      letter-spacing:.6px;
+      padding:5px 8px;
+      border-radius:999px;
+      background: rgba(0,255,136,.16);
+      border:1px solid rgba(0,255,136,.38);
+      color: var(--accent);
+      transform: translateY(-2px);
+      opacity:0;
+      transition: opacity .15s ease;
+      pointer-events:none;
+    }
+    .goalChip.show{ opacity:1; }
+
+    .metaLine{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:2px;
+    }
+    .metaChip{
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--muted);
+      font-size:12px;
+    }
+
     button{
       cursor:pointer;
-      background:#222;
-      border:1px solid #333;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.14);
       color:#fff;
-      padding:8px 10px;
-      border-radius:10px;
-      min-width:110px;
+      padding:10px 12px;
+      border-radius:12px;
+      width:100%;
+      font-weight:900;
+      transition: transform .05s ease, background .15s ease, border-color .15s ease;
+      box-shadow: 0 10px 18px rgba(0,0,0,.25);
     }
-    button:hover{ background:#2a2a2a; }
-    .empty{ opacity:.75; text-align:center; margin-top:22px; }
-    .err{ color:#ff6b6b; margin-top:10px; text-align:center; white-space:pre-wrap; }
-    .ok{ color:#9ae6b4; margin-top:10px; text-align:center; }
+    button:hover{
+      background: rgba(255,255,255,.09);
+      border-color: rgba(255,255,255,.20);
+    }
+    button:active{ transform: translateY(1px); }
+
+    .empty{
+      opacity:.82;
+      text-align:center;
+      margin-top:22px;
+      padding:18px 12px;
+      border:1px dashed rgba(255,255,255,.18);
+      border-radius:16px;
+      background: rgba(255,255,255,.03);
+    }
+    .err{
+      color:var(--danger);
+      margin-top:10px;
+      text-align:center;
+      white-space:pre-wrap;
+    }
+    .ok{
+      color:var(--ok);
+      margin-top:10px;
+      text-align:center;
+    }
+
+    @media (max-width: 720px){
+      .list{ grid-template-columns: 1fr; }
+      .league{ max-width: 100%; }
+      .scoreboard{ grid-template-columns: 1fr; }
+      .midScore{ width:100%; min-width:unset; }
+      .topStatusRow{
+        grid-template-columns: 1fr;
+        gap:8px;
+      }
+      .topLeft, .topCenter, .topRight{
+        justify-content:flex-start;
+      }
+      .marketBox{
+        grid-template-columns: 1fr;
+      }
+      .toolbar{
+        align-items:stretch;
+      }
+      .searchBox{
+        min-width:unset;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h3>Jogos ao vivo</h3>
 
-    <div class="topbar">
-      <div class="pill" id="statusPill">Atualizando...</div>
-      <div class="pill" id="countPill">0 jogos</div>
+  <div class="header">
+    <div class="headerInner">
+      <div class="titleBox">
+        <div class="title">Jogos ao vivo</div>
+        <div class="subtitle">Selecione um jogo e copie o eventId</div>
+      </div>
+
+      <div class="pills">
+        <div class="pill" id="statusPill">Atualizando...</div>
+        <div class="pill" id="countPill">0 jogos</div>
+
+        <div class="pill filter active" data-filter="all">Todos</div>
+        <div class="pill filter" data-filter="first">1º Tempo</div>
+        <div class="pill filter" data-filter="second">2º Tempo</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="toolbar">
+      <div class="searchBox">
+        <span class="searchIcon">🔎</span>
+        <input id="searchInput" class="searchInput" type="text" placeholder="Buscar por nome do time" />
+      </div>
     </div>
 
     <div id="list" class="list"></div>
-    <div id="empty" class="empty" style="display:none;">Nenhum jogo ao vivo encontrado.</div>
+
+    <div id="empty" class="empty" style="display:none;">
+      Nenhum jogo ao vivo encontrado.
+    </div>
+
     <div id="msg" class="ok" style="display:none;"></div>
     <div id="err" class="err"></div>
   </div>
@@ -62,22 +640,300 @@
     const msgEl = document.getElementById("msg");
     const statusPill = document.getElementById("statusPill");
     const countPill = document.getElementById("countPill");
+    const searchInput = document.getElementById("searchInput");
+    let filtroTempo = "all";
+    let termoBusca = "";
+
+    document.querySelectorAll(".filter").forEach(el => {
+      el.addEventListener("click", () => {
+        document.querySelectorAll(".filter").forEach(f => f.classList.remove("active"));
+        el.classList.add("active");
+        filtroTempo = el.dataset.filter;
+        refresh();
+      });
+    });
+
+    searchInput.addEventListener("input", () => {
+      termoBusca = searchInput.value.trim().toLowerCase();
+      refresh();
+    });
 
     function safeStr(x){ return (x === null || x === undefined) ? "" : String(x); }
     function safeScore(x){
       const n = Number(x);
       return Number.isFinite(n) ? String(n) : "0";
     }
+    function fmtNumber(x){
+      const n = Number(x);
+      if (!Number.isFinite(n)) return "--";
+      return n.toLocaleString("pt-BR", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+      });
+    }
+    function fmtOdd(x){
+      const n = Number(x);
+      if (!Number.isFinite(n)) return "--";
+      return n.toFixed(2);
+    }
+    function setStatus(text){ statusPill.innerText = text; }
 
-    function setStatus(text){
-      statusPill.innerText = text;
+    function mapHalf(inPlayMatchStatus){
+      const s = safeStr(inPlayMatchStatus);
+      if (!s) return { label: "—", cls: "" };
+      if (s === "KickOff") return { label: "1º Tempo", cls: "first" };
+      if (s === "FirstHalfEnd") return { label: "Intervalo", cls: "" };
+      if (s === "SecondHalfKickOff") return { label: "2º Tempo", cls: "second" };
+      if (s === "SecondHalfExtraTimeKickOff") return { label: "Prorrogação - 2º Tempo", cls: "second" };
+      return { label: s, cls: "" };
+    }
+
+    function getMinute(clock){
+      if(!clock) return 0;
+
+      const m = String(clock).match(/\d+/);
+      if(!m) return 0;
+
+      return Number(m[0]);
+    }
+
+    function isOpportunity(game){
+      const minute = getMinute(game?.clock);
+      const odd = Number(game?.lastMatchedOdds);
+      return minute > 78 && odd > 1.99;
+    }
+
+    function sortGames(games){
+      return [...games].sort((a,b) => {
+        const aOpp = isOpportunity(a) ? 1 : 0;
+        const bOpp = isOpportunity(b) ? 1 : 0;
+
+        if (bOpp !== aOpp) return bOpp - aOpp;
+
+        const aVol = Number(a?.market?.runnerVolume || 0);
+        const bVol = Number(b?.market?.runnerVolume || 0);
+
+        if (bVol !== aVol) return bVol - aVol;
+
+        const aMin = getMinute(a?.clock);
+        const bMin = getMinute(b?.clock);
+
+        return aMin - bMin;
+      });
+    }
+
+    const lastScores = new Map();
+
+    function makeCard(g){
+      const homeName = safeStr(g?.home?.name) || "--";
+      const awayName = safeStr(g?.away?.name) || "--";
+
+      const homeScore = safeScore(g?.home?.score);
+      const awayScore = safeScore(g?.away?.score);
+
+      const league = safeStr(g?.league).trim();
+      const clock = safeStr(g?.clock);
+      const eventId = safeStr(g?.id);
+      const marketId = safeStr(g?.market?.id);
+
+      const inPlayMatchStatus = safeStr(g?.inPlayMatchStatus);
+      const half = mapHalf(inPlayMatchStatus);
+
+      const marketName = safeStr(g?.market?.name) || "--";
+      const runnerVolume = g?.market?.runnerVolume;
+      const marketVolume = g?.market?.marketVolume;
+      const lastMatchedOdds = g?.lastMatchedOdds;
+
+      const scoreKey = `${homeScore}-${awayScore}`;
+
+      const card = document.createElement("div");
+      card.className = "card";
+
+      if (isOpportunity(g)) {
+        card.classList.add("hot");
+      }
+
+      const inner = document.createElement("div");
+      inner.className = "cardInner";
+
+      const header = document.createElement("div");
+      header.className = "cardHeader";
+
+      if (league) {
+        const leagueEl = document.createElement("div");
+        leagueEl.className = "league";
+        leagueEl.textContent = league;
+        header.appendChild(leagueEl);
+      }
+
+      const topStatusRow = document.createElement("div");
+      topStatusRow.className = "topStatusRow";
+      topStatusRow.innerHTML = `
+        <div class="topLeft">
+          <span class="badgeLive"><span class="pulseDot"></span>AO VIVO</span>
+        </div>
+        <div class="topCenter">
+          <span class="halfBadge ${half.cls}">${half.label}</span>
+        </div>
+        <div class="topRight">
+          <span class="oddBadge"><span class="oddIcon">⚡</span><span>${fmtOdd(lastMatchedOdds)}</span></span>
+        </div>
+      `;
+
+      header.appendChild(topStatusRow);
+
+      const scoreboard = document.createElement("div");
+      scoreboard.className = "scoreboard";
+
+      const leftCol = document.createElement("div");
+      leftCol.className = "teamCol";
+      leftCol.innerHTML = `
+        <div class="teamRow home">
+          <span class="dot home"></span>
+          <div class="teamName">${homeName}</div>
+        </div>
+      `;
+
+      const midScore = document.createElement("div");
+      midScore.className = "midScore";
+      midScore.innerHTML = `
+        <div class="goalChip">GOL!</div>
+        <div class="bigScore">${homeScore} - ${awayScore}</div>
+        <div class="smallMeta">${clock ? `Minuto: ${clock}` : ""}</div>
+      `;
+
+      const rightCol = document.createElement("div");
+      rightCol.className = "teamCol";
+      rightCol.innerHTML = `
+        <div class="teamRow away">
+          <span class="dot away"></span>
+          <div class="teamName">${awayName}</div>
+        </div>
+      `;
+
+      scoreboard.appendChild(leftCol);
+      scoreboard.appendChild(midScore);
+      scoreboard.appendChild(rightCol);
+
+      const marketBox = document.createElement("div");
+      marketBox.className = "marketBox";
+      marketBox.innerHTML = `
+        <div class="marketItem">
+          <div class="marketLabel">Mercado</div>
+          <div class="marketValue">${marketName}</div>
+        </div>
+        <div class="marketItem">
+          <div class="marketLabel">Volume Runner</div>
+          <div class="marketValue">R$ ${fmtNumber(runnerVolume)}</div>
+        </div>
+        <div class="marketItem">
+          <div class="marketLabel">Volume Total</div>
+          <div class="marketValue">R$ ${fmtNumber(marketVolume)}</div>
+        </div>
+      `;
+
+      const meta = document.createElement("div");
+      meta.className = "metaLine";
+
+      const eventChip = document.createElement("span");
+      eventChip.className = "metaChip";
+      eventChip.textContent = `eventId: ${eventId || "--"}`;
+
+      const marketChip = document.createElement("span");
+      marketChip.className = "metaChip";
+      marketChip.textContent = `marketId: ${marketId || "--"}`;
+
+      meta.appendChild(eventChip);
+      meta.appendChild(marketChip);
+
+      inner.appendChild(header);
+      inner.appendChild(scoreboard);
+      inner.appendChild(marketBox);
+      inner.appendChild(meta);
+
+      const btn = document.createElement("button");
+      btn.innerText = "Copiar eventId";
+      btn.addEventListener("click", async () => {
+        try{
+          if (!eventId) return;
+
+          if (window.homeApi?.selectEvent) {
+            try{
+              const ok = await window.homeApi.selectEvent({ eventId });
+              if (ok) {
+                msgEl.innerText = `eventId copiado: ${eventId}`;
+                msgEl.style.display = "block";
+                setTimeout(() => (msgEl.style.display = "none"), 2200);
+                return;
+              }
+            }catch(_e){}
+          }
+
+          await navigator.clipboard.writeText(eventId);
+          msgEl.innerText = `eventId copiado: ${eventId}`;
+          msgEl.style.display = "block";
+          setTimeout(() => (msgEl.style.display = "none"), 2200);
+        }catch(e){
+          msgEl.innerText = "Falha ao copiar (permissão do clipboard).";
+          msgEl.style.display = "block";
+          setTimeout(() => (msgEl.style.display = "none"), 2200);
+        }
+      });
+
+      card.appendChild(inner);
+      card.appendChild(btn);
+
+      if (eventId) {
+        const prev = lastScores.get(eventId);
+        if (prev && prev !== scoreKey) {
+          midScore.classList.remove("goalFlash");
+          void midScore.offsetWidth;
+          midScore.classList.add("goalFlash");
+
+          const chip = midScore.querySelector(".goalChip");
+          chip.classList.add("show");
+          setTimeout(() => chip.classList.remove("show"), 2500);
+        }
+        lastScores.set(eventId, scoreKey);
+      }
+
+      return card;
     }
 
     function render(games){
       listEl.innerHTML = "";
       msgEl.style.display = "none";
+      errEl.innerText = "";
 
-      const n = (games || []).length;
+      let filteredGames = Array.isArray(games) ? [...games] : [];
+
+      if (filtroTempo !== "all") {
+        filteredGames = filteredGames.filter(g => {
+          const s = g?.inPlayMatchStatus || "";
+
+          if (filtroTempo === "first") {
+            return s === "KickOff";
+          }
+
+          if (filtroTempo === "second") {
+            return s === "SecondHalfKickOff" || s === "SecondHalfExtraTimeKickOff";
+          }
+
+          return true;
+        });
+      }
+
+      if (termoBusca) {
+        filteredGames = filteredGames.filter(g => {
+          const home = safeStr(g?.home?.name).toLowerCase();
+          const away = safeStr(g?.away?.name).toLowerCase();
+          return home.includes(termoBusca) || away.includes(termoBusca);
+        });
+      }
+
+      filteredGames = sortGames(filteredGames);
+
+      const n = filteredGames.length;
       countPill.innerText = `${n} jogo${n === 1 ? "" : "s"}`;
 
       if(!n){
@@ -86,67 +942,13 @@
       }
       emptyEl.style.display = "none";
 
-      for(const g of games){
-        // ✅ agora bate com o seu main.js: { id, league, startTime, clock, home:{name,score}, away:{name,score} }
-        const homeName = safeStr(g?.home?.name);
-        const awayName = safeStr(g?.away?.name);
-
-        const homeScore = safeScore(g?.home?.score);
-        const awayScore = safeScore(g?.away?.score);
-
-        const league = safeStr(g?.league);
-        const clock = safeStr(g?.clock);
-        const startTime = safeStr(g?.startTime);
-        const eventId = safeStr(g?.id);
-
-        const card = document.createElement("div");
-        card.className = "card";
-
-        const left = document.createElement("div");
-        left.className = "teams";
-        left.innerHTML = `
-          <div class="line">
-            <div class="team">${homeName || "--"}</div>
-            <div class="score">${homeScore}</div>
-          </div>
-          <div class="line">
-            <div class="team">${awayName || "--"}</div>
-            <div class="score">${awayScore}</div>
-          </div>
-          <div class="meta">
-            ${league ? `Liga: ${league} | ` : ""}
-            Tempo: ${clock || "--"} ${startTime ? `| Início: ${startTime} ` : ""}
-            | eventId: ${eventId || "--"}
-          </div>
-        `;
-
-        const btn = document.createElement("button");
-        btn.innerText = "Copiar eventId";
-        btn.addEventListener("click", async () => {
-          try{
-            if (!eventId) return;
-
-            await navigator.clipboard.writeText(eventId);
-            msgEl.innerText = `eventId copiado: ${eventId}`;
-            msgEl.style.display = "block";
-            setTimeout(() => (msgEl.style.display = "none"), 2200);
-          }catch(e){
-            msgEl.innerText = "Falha ao copiar (permissão do clipboard).";
-            msgEl.style.display = "block";
-            setTimeout(() => (msgEl.style.display = "none"), 2200);
-          }
-        });
-
-        card.appendChild(left);
-        card.appendChild(btn);
-        listEl.appendChild(card);
+      for (const g of filteredGames) {
+        listEl.appendChild(makeCard(g));
       }
     }
 
     async function refresh(){
-      errEl.innerText = "";
       setStatus("Atualizando...");
-
       try{
         if (!window.homeApi?.getInplay) {
           throw new Error("homeApi.getInplay não existe (preload_home.js não carregou ou está antigo).");
@@ -156,6 +958,7 @@
 
         const now = new Date();
         setStatus(`Atualizado: ${now.toLocaleTimeString("pt-BR")}`);
+
         render(Array.isArray(games) ? games : []);
       }catch(e){
         setStatus("Erro ao atualizar");
@@ -164,7 +967,6 @@
       }
     }
 
-    // ✅ primeira carga + auto refresh
     refresh();
     setInterval(refresh, 5000);
   </script>

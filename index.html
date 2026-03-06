@@ -63,7 +63,9 @@ button{
 
 <h3>Painel Under</h3>
 
-<input id="urlOdds" placeholder="Cole a URL da Odd (Layback)">
+<input id="eventId" placeholder="Cole o event_id">
+<br>
+<input id="marketId" placeholder="Cole o market_id">
 <br>
 <input id="urlTempo" placeholder="Cole a URL do Tempo">
 <br>
@@ -107,13 +109,14 @@ window.addEventListener("click", (e) => {
 
 // 🔹 BOTÃO INICIAR
 document.getElementById("btn").addEventListener("click", () => {
-  const urlOdds = document.getElementById("urlOdds").value;
-  const urlTempo = document.getElementById("urlTempo").value;
+  const eventId = document.getElementById("eventId").value.trim();
+  const marketId = document.getElementById("marketId").value.trim();
+  const urlTempo = document.getElementById("urlTempo").value.trim();
   const acrescimos = document.getElementById("acrescimos").value;
 
   const tempoBase = document.querySelector('input[name="tempoJogo"]:checked').value;
 
-  window.api?.iniciarCaptura({ urlOdds, urlTempo, acrescimos, tempoBase });
+  window.api?.iniciarCaptura({ eventId, marketId, urlTempo, acrescimos, tempoBase });
 });
 
 // 🔹 ATUALIZAR ACRÉSCIMOS AUTOMATICAMENTE
