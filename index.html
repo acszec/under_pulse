@@ -9,16 +9,16 @@ body{
   text-align:center;
   background:#111;
   color:#fff;
+  margin:0;
+  padding:16px 12px;
 }
-input{
-  width:85%;
-  padding:8px;
-  margin-top:10px;
+h3{
+  margin:0;
 }
-button{
-  padding:10px 20px;
-  margin-top:15px;
-  cursor:pointer;
+.subtitle{
+  margin-top:8px;
+  color:#bbb;
+  font-size:13px;
 }
 #tempo{
   font-size:30px;
@@ -51,40 +51,12 @@ button{
   color:red;
   margin-top:10px;
 }
-.radio-group{
-  margin-top:10px;
-}
-.radio-group input{
-  width:auto;
-}
 </style>
 </head>
 <body>
 
 <h3>Painel Under</h3>
-
-<input id="eventId" placeholder="Cole o event_id">
-<br>
-<input id="marketId" placeholder="Cole o market_id">
-<br>
-<input id="urlTempo" placeholder="Cole a URL do Tempo">
-<br>
-<input id="acrescimos" type="number" value="5" placeholder="Acréscimos (padrão 5)">
-<br>
-
-<div class="radio-group">
-  <label>
-    <input type="radio" name="tempoJogo" value="45" checked>
-    1º Tempo
-  </label>
-
-  <label style="margin-left:15px;">
-    <input type="radio" name="tempoJogo" value="90">
-    2º Tempo
-  </label>
-</div>
-
-<button id="btn">Iniciar</button>
+<div class="subtitle">A captura é iniciada pela tela Home ao selecionar um jogo.</div>
 
 <div id="tempo">--:--</div>
 <div id="odd">--</div>
@@ -97,34 +69,10 @@ button{
 <script>
 const erroEl = document.getElementById("erro");
 
-// ✅ Se preload não carregar, mostra o motivo (ao invés de “tela muda”)
 if (!window.api) {
   erroEl.innerText = "ERRO: window.api não existe (preload não carregou). Verifique o preload.js no main.";
 }
 
-// ✅ ajuda foco (às vezes mac perde foco fácil)
-window.addEventListener("click", (e) => {
-  if (e.target && e.target.tagName === "INPUT") e.target.focus();
-});
-
-// 🔹 BOTÃO INICIAR
-document.getElementById("btn").addEventListener("click", () => {
-  const eventId = document.getElementById("eventId").value.trim();
-  const marketId = document.getElementById("marketId").value.trim();
-  const urlTempo = document.getElementById("urlTempo").value.trim();
-  const acrescimos = document.getElementById("acrescimos").value;
-
-  const tempoBase = document.querySelector('input[name="tempoJogo"]:checked').value;
-
-  window.api?.iniciarCaptura({ eventId, marketId, urlTempo, acrescimos, tempoBase });
-});
-
-// 🔹 ATUALIZAR ACRÉSCIMOS AUTOMATICAMENTE
-document.getElementById("acrescimos").addEventListener("input", function () {
-  window.api?.atualizarAcrescimos(this.value);
-});
-
-// 🔹 ATUALIZAÇÃO DOS DADOS
 window.api?.onAtualizarDados((dados)=>{
   const oddEl = document.getElementById("odd");
   const tempoEl = document.getElementById("tempo");
@@ -171,7 +119,6 @@ window.api?.onAtualizarDados((dados)=>{
   }
 });
 
-// 🔹 ERROS
 window.api?.onErro((msg)=>{
   erroEl.innerText = msg;
 });

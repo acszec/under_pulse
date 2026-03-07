@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld("homeApi", {
   // ✅ busca lista de jogos ao vivo (retorna array)
   getInplay: () => ipcRenderer.invoke("home-get-inplay"),
 
-  // (opcional) selecionar um jogo: só vai funcionar quando você implementar no main.js
-  selectEvent: (data) => ipcRenderer.invoke("home-select-event", data),
+  // ✅ inicia captura a partir da seleção feita na home
+  startCapture: (data) => ipcRenderer.invoke("home-start-capture", data),
+
+  // ✅ abre/foca janela de login do Layback
+  openLaybackLogin: () => ipcRenderer.invoke("home-open-layback-login"),
 });

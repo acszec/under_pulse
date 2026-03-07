@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Book de Ofertas - Under</title>
+<title>Zonas de Suporte e Resistencia - Under</title>
 <style>
   body{
     font-family: Arial;
@@ -50,9 +50,9 @@
   th{ opacity:.85; }
   td:first-child, th:first-child{ text-align:left; }
 
-  /* ✅ cores pedidas */
-  .c-back { color:#fac9d4; }   /* BACK */
-  .c-lay  { color:#a6d8ff; }   /* LAY  */
+  /* Cores invertidas conforme pedido */
+  .c-res { color:#fac9d4; }   /* RESISTENCIA */
+  .c-sup { color:#a6d8ff; }   /* SUPORTE */
 
   .muted{
     opacity:.75;
@@ -64,7 +64,7 @@
 </head>
 <body>
 
-<h3>Book de Ofertas (Under)</h3>
+<h3>Zonas de Suporte e Resistencia (Under)</h3>
 
 <div class="row">
   <div class="card">
@@ -79,12 +79,23 @@
 
 <div class="row">
   <div class="card">
-    <div class="k">Soma Top (coluna esquerda)</div>
-    <div class="v c-back" id="sumLeft">--</div>
+    <div class="k">Soma Zona de Resistencia (3 ticks abaixo)</div>
+    <div class="v c-res" id="sumRes">--</div>
   </div>
   <div class="card">
-    <div class="k">Soma Top (coluna direita)</div>
-    <div class="v c-lay" id="sumRight">--</div>
+    <div class="k">Soma Zona de Suporte (3 ticks acima)</div>
+    <div class="v c-sup" id="sumSup">--</div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="card">
+    <div class="k">Vantagem no momento</div>
+    <div class="v" id="adv">--</div>
+  </div>
+  <div class="card">
+    <div class="k">Diferenca entre zonas</div>
+    <div class="v" id="diff">--</div>
   </div>
 </div>
 
@@ -92,24 +103,24 @@
   <div class="card">
     <table>
       <thead>
-        <tr><th>Odd</th><th>R$ Disp.</th></tr>
+        <tr><th>Suporte (odd)</th><th>R$ Disp.</th></tr>
       </thead>
-      <tbody id="tblLeft"></tbody>
+      <tbody id="tblSup"></tbody>
     </table>
   </div>
 
   <div class="card">
     <table>
       <thead>
-        <tr><th>Odd</th><th>R$ Disp.</th></tr>
+        <tr><th>Resistencia (odd)</th><th>R$ Disp.</th></tr>
       </thead>
-      <tbody id="tblRight"></tbody>
+      <tbody id="tblRes"></tbody>
     </table>
   </div>
 </div>
 
 <div class="muted">
-  * “R$ Disp.” vem do <b>available-amount</b> da API (book de ofertas).
+  * Cada zona soma o <b>available-amount</b> dos 3 ticks em torno da odd last matched.
 </div>
 
 <script>
@@ -120,36 +131,70 @@
     return x.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function fmtOdd(n){
+    if(n === null || n === undefined) return "--";
+    const x = Number(n);
+    if(!Number.isFinite(x)) return "--";
+    return x.toFixed(2);
+  }
+
   function renderTable(tbody, rows, cls){
     tbody.innerHTML = "";
     (rows || []).forEach(r => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td class="${cls}">${r.odds}</td><td class="${cls}">${fmt(r.amount)}</td>`;
+      tr.innerHTML = `<td class="${cls}">${fmtOdd(r.odds)}</td><td class="${cls}">${fmt(r.amount)}</td>`;
       tbody.appendChild(tr);
     });
   }
 
-  // ✅ agora escuta book-dados
+  function advText(v){
+    if (v === "suporte") return "Suporte";
+    if (v === "resistencia") return "Resistencia";
+    return "Equilibrado";
+  }
+
   window.volumeApi.onBookDados((d) => {
     document.getElementById("tempo").innerText = d.tempo ?? "--";
-    document.getElementById("odd").innerText = d.odd ?? "--";
+    document.getElementById("odd").innerText = fmtOdd(d.odd);
 
-    // esquerda = BACK (cor #fac9d4)
-    document.getElementById("sumLeft").innerText = fmt(d.bookBackSum);
-    renderTable(document.getElementById("tblLeft"), d.bookBacks, "c-back");
+    document.getElementById("sumRes").innerText = fmt(d.resistanceSum);
+    document.getElementById("sumSup").innerText = fmt(d.supportSum);
+    const advEl = document.getElementById("adv");
+    advEl.innerText = advText(d.zoneAdvantage);
+    if (d.zoneAdvantage === "suporte") {
+      advEl.className = "v c-sup";
+    } else if (d.zoneAdvantage === "resistencia") {
+      advEl.className = "v c-res";
+    } else {
+      advEl.className = "v";
+    }
+    const diffEl = document.getElementById("diff");
+    diffEl.innerText = fmt(d.zoneDiff);
+    if (d.zoneAdvantage === "suporte") {
+      diffEl.className = "v c-sup";
+    } else if (d.zoneAdvantage === "resistencia") {
+      diffEl.className = "v c-res";
+    } else {
+      diffEl.className = "v";
+    }
 
-    // direita = LAY (cor #a6d8ff)
-    document.getElementById("sumRight").innerText = fmt(d.bookLaySum);
-    renderTable(document.getElementById("tblRight"), d.bookLays, "c-lay");
+    renderTable(document.getElementById("tblRes"), d.resistanceTicks, "c-res");
+    renderTable(document.getElementById("tblSup"), d.supportTicks, "c-sup");
   });
 
   window.volumeApi.onReset(() => {
     document.getElementById("tempo").innerText = "--";
     document.getElementById("odd").innerText = "--";
-    document.getElementById("sumLeft").innerText = "--";
-    document.getElementById("sumRight").innerText = "--";
-    document.getElementById("tblLeft").innerHTML = "";
-    document.getElementById("tblRight").innerHTML = "";
+    document.getElementById("sumRes").innerText = "--";
+    document.getElementById("sumSup").innerText = "--";
+    const advEl = document.getElementById("adv");
+    advEl.innerText = "--";
+    advEl.className = "v";
+    const diffEl = document.getElementById("diff");
+    diffEl.innerText = "--";
+    diffEl.className = "v";
+    document.getElementById("tblRes").innerHTML = "";
+    document.getElementById("tblSup").innerHTML = "";
   });
 </script>
 

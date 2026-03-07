@@ -149,6 +149,16 @@
       background: rgba(16,16,16,.85);
       white-space:nowrap;
     }
+    .pillBtn{
+      cursor:pointer;
+      color:#d6ffe8;
+      background: rgba(0,255,136,.12);
+      border-color: rgba(0,255,136,.30);
+    }
+    .pillBtn:hover{
+      background: rgba(0,255,136,.18);
+      border-color: rgba(0,255,136,.45);
+    }
     .filter{
       cursor:pointer;
       transition: all .15s ease;
@@ -571,6 +581,70 @@
       text-align:center;
     }
 
+    .modalBackdrop{
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.62);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:50;
+      padding:16px;
+    }
+    .modalBackdrop.open{
+      display:flex;
+    }
+    .modalCard{
+      width:min(560px, 100%);
+      background: linear-gradient(180deg, #1d1d1d, #141414);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:14px;
+      padding:14px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.45);
+    }
+    .modalTitle{
+      margin:0;
+      font-size:16px;
+      font-weight:900;
+    }
+    .modalHint{
+      margin:8px 0 10px;
+      color:var(--muted);
+      font-size:13px;
+    }
+    .modalInput{
+      width:100%;
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:10px;
+      background: rgba(0,0,0,.22);
+      color:#fff;
+      padding:10px 12px;
+      font-size:14px;
+      outline:none;
+    }
+    .modalInput:focus{
+      border-color: rgba(0,255,136,.5);
+      box-shadow: 0 0 0 2px rgba(0,255,136,.15);
+    }
+    .modalActions{
+      display:flex;
+      gap:10px;
+      justify-content:flex-end;
+      margin-top:12px;
+    }
+    .modalActions button{
+      width:auto;
+      min-width:110px;
+    }
+    .modalCancel{
+      background: rgba(255,255,255,.04);
+    }
+    .modalConfirm{
+      background: rgba(0,255,136,.16);
+      border-color: rgba(0,255,136,.4);
+      color:#d6ffe8;
+    }
+
     @media (max-width: 720px){
       .list{ grid-template-columns: 1fr; }
       .league{ max-width: 100%; }
@@ -601,12 +675,13 @@
     <div class="headerInner">
       <div class="titleBox">
         <div class="title">Jogos ao vivo</div>
-        <div class="subtitle">Selecione um jogo e copie o eventId</div>
+        <div class="subtitle">Selecione um jogo para iniciar a captura</div>
       </div>
 
       <div class="pills">
         <div class="pill" id="statusPill">Atualizando...</div>
         <div class="pill" id="countPill">0 jogos</div>
+        <button id="btnLaybackLogin" class="pill pillBtn" type="button">Login Layback</button>
 
         <div class="pill filter active" data-filter="all">Todos</div>
         <div class="pill filter" data-filter="first">1º Tempo</div>
@@ -633,6 +708,18 @@
     <div id="err" class="err"></div>
   </div>
 
+  <div id="tempoModal" class="modalBackdrop" aria-hidden="true">
+    <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="tempoModalTitle">
+      <h4 id="tempoModalTitle" class="modalTitle">URL do tempo do jogo</h4>
+      <p class="modalHint">Cole a URL usada para capturar o relógio da partida.</p>
+      <input id="tempoModalInput" class="modalInput" type="text" placeholder="https://..." />
+      <div class="modalActions">
+        <button id="tempoModalCancel" class="modalCancel" type="button">Cancelar</button>
+        <button id="tempoModalConfirm" class="modalConfirm" type="button">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const listEl = document.getElementById("list");
     const emptyEl = document.getElementById("empty");
@@ -640,7 +727,12 @@
     const msgEl = document.getElementById("msg");
     const statusPill = document.getElementById("statusPill");
     const countPill = document.getElementById("countPill");
+    const btnLaybackLogin = document.getElementById("btnLaybackLogin");
     const searchInput = document.getElementById("searchInput");
+    const tempoModal = document.getElementById("tempoModal");
+    const tempoModalInput = document.getElementById("tempoModalInput");
+    const tempoModalConfirm = document.getElementById("tempoModalConfirm");
+    const tempoModalCancel = document.getElementById("tempoModalCancel");
     let filtroTempo = "all";
     let termoBusca = "";
 
@@ -656,6 +748,22 @@
     searchInput.addEventListener("input", () => {
       termoBusca = searchInput.value.trim().toLowerCase();
       refresh();
+    });
+
+    btnLaybackLogin.addEventListener("click", async () => {
+      try {
+        if (!window.homeApi?.openLaybackLogin) {
+          throw new Error("homeApi.openLaybackLogin não existe no preload_home.js.");
+        }
+        const res = await window.homeApi.openLaybackLogin();
+        msgEl.innerText = res?.ok ? "Janela de login do Layback aberta." : (res?.message || "Não foi possível abrir o login.");
+        msgEl.style.display = "block";
+        setTimeout(() => (msgEl.style.display = "none"), 2200);
+      } catch (e) {
+        msgEl.innerText = (e && e.message) ? e.message : "Falha ao abrir login do Layback.";
+        msgEl.style.display = "block";
+        setTimeout(() => (msgEl.style.display = "none"), 2200);
+      }
     });
 
     function safeStr(x){ return (x === null || x === undefined) ? "" : String(x); }
@@ -677,6 +785,39 @@
       return n.toFixed(2);
     }
     function setStatus(text){ statusPill.innerText = text; }
+
+    function askTempoUrl() {
+      return new Promise((resolve) => {
+        const close = (value) => {
+          tempoModal.classList.remove("open");
+          tempoModal.setAttribute("aria-hidden", "true");
+          tempoModalConfirm.removeEventListener("click", onConfirm);
+          tempoModalCancel.removeEventListener("click", onCancel);
+          tempoModal.removeEventListener("click", onBackdropClick);
+          window.removeEventListener("keydown", onKeyDown);
+          resolve(value);
+        };
+
+        const onConfirm = () => close(String(tempoModalInput.value || "").trim());
+        const onCancel = () => close(null);
+        const onBackdropClick = (e) => {
+          if (e.target === tempoModal) close(null);
+        };
+        const onKeyDown = (e) => {
+          if (e.key === "Escape") close(null);
+          if (e.key === "Enter") onConfirm();
+        };
+
+        tempoModalInput.value = "";
+        tempoModal.classList.add("open");
+        tempoModal.setAttribute("aria-hidden", "false");
+        tempoModalConfirm.addEventListener("click", onConfirm);
+        tempoModalCancel.addEventListener("click", onCancel);
+        tempoModal.addEventListener("click", onBackdropClick);
+        window.addEventListener("keydown", onKeyDown);
+        tempoModalInput.focus();
+      });
+    }
 
     function mapHalf(inPlayMatchStatus){
       const s = safeStr(inPlayMatchStatus);
@@ -832,51 +973,58 @@
         </div>
       `;
 
-      const meta = document.createElement("div");
-      meta.className = "metaLine";
-
-      const eventChip = document.createElement("span");
-      eventChip.className = "metaChip";
-      eventChip.textContent = `eventId: ${eventId || "--"}`;
-
-      const marketChip = document.createElement("span");
-      marketChip.className = "metaChip";
-      marketChip.textContent = `marketId: ${marketId || "--"}`;
-
-      meta.appendChild(eventChip);
-      meta.appendChild(marketChip);
-
       inner.appendChild(header);
       inner.appendChild(scoreboard);
       inner.appendChild(marketBox);
-      inner.appendChild(meta);
 
       const btn = document.createElement("button");
-      btn.innerText = "Copiar eventId";
+      btn.innerText = "Selecionar jogo";
       btn.addEventListener("click", async () => {
-        try{
-          if (!eventId) return;
-
-          if (window.homeApi?.selectEvent) {
-            try{
-              const ok = await window.homeApi.selectEvent({ eventId });
-              if (ok) {
-                msgEl.innerText = `eventId copiado: ${eventId}`;
-                msgEl.style.display = "block";
-                setTimeout(() => (msgEl.style.display = "none"), 2200);
-                return;
-              }
-            }catch(_e){}
+        try {
+          if (!eventId || !marketId) {
+            msgEl.innerText = "Esse jogo ainda não tem eventId/marketId válido.";
+            msgEl.style.display = "block";
+            setTimeout(() => (msgEl.style.display = "none"), 2600);
+            return;
           }
 
-          await navigator.clipboard.writeText(eventId);
-          msgEl.innerText = `eventId copiado: ${eventId}`;
+          const urlTempo = await askTempoUrl();
+          if (urlTempo === null) return;
+          if (!urlTempo) {
+            msgEl.innerText = "A URL do tempo é obrigatória.";
+            msgEl.style.display = "block";
+            setTimeout(() => (msgEl.style.display = "none"), 2600);
+            return;
+          }
+
+          if (!window.homeApi?.startCapture) {
+            throw new Error("homeApi.startCapture não existe no preload_home.js.");
+          }
+
+          btn.disabled = true;
+          btn.innerText = "Iniciando...";
+
+          const result = await window.homeApi.startCapture({
+            eventId,
+            marketId,
+            urlTempo,
+            inPlayMatchStatus
+          });
+
+          if (result?.ok) {
+            msgEl.innerText = `Captura iniciada (eventId ${eventId})`;
+          } else {
+            msgEl.innerText = result?.message || "Não foi possível iniciar a captura.";
+          }
           msgEl.style.display = "block";
-          setTimeout(() => (msgEl.style.display = "none"), 2200);
-        }catch(e){
-          msgEl.innerText = "Falha ao copiar (permissão do clipboard).";
+          setTimeout(() => (msgEl.style.display = "none"), 2600);
+        } catch (e) {
+          msgEl.innerText = (e && e.message) ? e.message : "Falha ao iniciar captura.";
           msgEl.style.display = "block";
-          setTimeout(() => (msgEl.style.display = "none"), 2200);
+          setTimeout(() => (msgEl.style.display = "none"), 2600);
+        } finally {
+          btn.disabled = false;
+          btn.innerText = "Selecionar jogo";
         }
       });
 

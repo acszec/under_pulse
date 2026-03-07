@@ -83,6 +83,11 @@ function processLoggedRequestQueue() {
 
         await sleep(120);
       } catch (err) {
+        const errMsg = String(err?.message || "");
+        if ((errMsg.includes("HTTP 401") || errMsg.includes("HTTP 403")) && laybackWindow && !laybackWindow.isDestroyed()) {
+          laybackWindow.show();
+          laybackWindow.focus();
+        }
         job.reject(err);
       } finally {
         loggedRequestInFlight -= 1;
@@ -345,6 +350,68 @@ function toNumberOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+const BETFAIR_ODDS_LADDER = (() => {
+  const ranges = [
+    [1.01, 2.0, 0.01],
+    [2.02, 3.0, 0.02],
+    [3.05, 4.0, 0.05],
+    [4.1, 6.0, 0.1],
+    [6.2, 10.0, 0.2],
+    [10.5, 20.0, 0.5],
+    [21.0, 30.0, 1.0],
+    [32.0, 50.0, 2.0],
+    [55.0, 100.0, 5.0],
+    [110.0, 1000.0, 10.0]
+  ];
+
+  const out = [];
+  for (const [start, end, step] of ranges) {
+    for (let v = start; v <= end + 1e-9; v += step) {
+      out.push(Number(v.toFixed(2)));
+    }
+  }
+  return out;
+})();
+
+function findNearestLadderIndex(odd) {
+  if (!Number.isFinite(odd)) return -1;
+
+  let bestIdx = 0;
+  let bestDist = Infinity;
+
+  for (let i = 0; i < BETFAIR_ODDS_LADDER.length; i += 1) {
+    const dist = Math.abs(BETFAIR_ODDS_LADDER[i] - odd);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
+}
+
+function getTickOddsAround(odd, count) {
+  const idx = findNearestLadderIndex(odd);
+  if (idx < 0) return { resistanceOdds: [], supportOdds: [], matchedOdd: null };
+
+  const resistanceOdds = [];
+  const supportOdds = [];
+
+  for (let i = 1; i <= count; i += 1) {
+    const lowerIdx = idx - i;
+    const upperIdx = idx + i;
+
+    if (lowerIdx >= 0) resistanceOdds.push(BETFAIR_ODDS_LADDER[lowerIdx]);
+    if (upperIdx < BETFAIR_ODDS_LADDER.length) supportOdds.push(BETFAIR_ODDS_LADDER[upperIdx]);
+  }
+
+  return {
+    resistanceOdds,
+    supportOdds,
+    matchedOdd: BETFAIR_ODDS_LADDER[idx]
+  };
+}
+
 /**
  * ✅ runner correto do mercado alvo: MENOS DE / UNDER
  */
@@ -465,9 +532,10 @@ async function getEventUnderMarketByScore(eventId, totalGoals, inPlayMatchStatus
   }
 }
 
-function createWindows() {
+function createStartupWindows() {
   // 🔹 JANELA LAYBACK (login)
   laybackWindow = new BrowserWindow({
+    show: false,
     width: 1200,
     height: 800,
     webPreferences: {
@@ -501,7 +569,10 @@ function createWindows() {
   homeWindow.loadFile(path.join(__dirname, "home.html"));
   homeWindow.on("closed", () => (homeWindow = null));
   attachContextMenu(homeWindow);
+}
 
+function ensurePainelWindow() {
+  if (painel && !painel.isDestroyed()) return painel;
   // 🔹 PAINEL PRINCIPAL
   painel = new BrowserWindow({
     width: 420,
@@ -520,7 +591,11 @@ function createWindows() {
   painel.loadFile(path.join(__dirname, "index.html"));
   painel.on("closed", () => (painel = null));
   attachContextMenu(painel);
+  return painel;
+}
 
+function ensureGraficoWindow() {
+  if (graficoWindow && !graficoWindow.isDestroyed()) return graficoWindow;
   // 🔹 GRÁFICOS
   graficoWindow = new BrowserWindow({
     width: 900,
@@ -534,12 +609,16 @@ function createWindows() {
   graficoWindow.loadFile(path.join(__dirname, "grafico.html"));
   graficoWindow.on("closed", () => (graficoWindow = null));
   attachContextMenu(graficoWindow);
+  return graficoWindow;
+}
 
-  // 🔹 BOOK DE OFERTAS
+function ensureVolumeWindow() {
+  if (volumeWindow && !volumeWindow.isDestroyed()) return volumeWindow;
+  // 🔹 ZONAS (SUPORTE/RESISTÊNCIA)
   volumeWindow = new BrowserWindow({
     width: 520,
     height: 760,
-    title: "Book de Ofertas - Under",
+    title: "Zonas - Under",
     webPreferences: {
       preload: path.join(__dirname, "preload_volume.js"),
       contextIsolation: true
@@ -548,22 +627,25 @@ function createWindows() {
   volumeWindow.loadFile(path.join(__dirname, "volume.html"));
   volumeWindow.on("closed", () => (volumeWindow = null));
   attachContextMenu(volumeWindow);
+  return volumeWindow;
+}
+
+function ensureCaptureWindows() {
+  ensurePainelWindow();
+  ensureGraficoWindow();
+  ensureVolumeWindow();
+}
+
+function openLaybackLoginWindow() {
+  if (!laybackWindow || laybackWindow.isDestroyed()) return false;
+  laybackWindow.show();
+  laybackWindow.focus();
+  return true;
 }
 
 app.whenReady().then(() => {
   setupAppMenu();
-  createWindows();
-});
-
-ipcMain.handle("home-select-event", async (_event, data) => {
-  try {
-    const eventId = String(data?.eventId ?? "").trim();
-    if (!eventId) return false;
-    clipboard.writeText(eventId);
-    return true;
-  } catch {
-    return false;
-  }
+  createStartupWindows();
 });
 
 /**
@@ -646,10 +728,31 @@ ipcMain.handle("home-get-inplay", async () => {
 
 // 🔹 INICIAR CAPTURA
 ipcMain.on("iniciar-captura", async (_event, payload) => {
-  const { eventId, marketId, urlTempo, acrescimos, tempoBase } = payload;
+  await startCaptureFromPayload(payload);
+});
+
+ipcMain.handle("home-start-capture", async (_event, payload) => {
+  return await startCaptureFromPayload(payload, { source: "home" });
+});
+
+ipcMain.handle("home-open-layback-login", async () => {
+  const ok = openLaybackLoginWindow();
+  if (!ok) return { ok: false, message: "Janela do Layback não está disponível." };
+  return { ok: true };
+});
+
+async function startCaptureFromPayload(payload, opts = {}) {
+  const { eventId, marketId, urlTempo, acrescimos, tempoBase, inPlayMatchStatus } = payload || {};
+  const source = opts.source || "generic";
 
   acrescimosGlobal = parseInt(acrescimos, 10) || 5;
-  tempoBaseGlobal = parseInt(tempoBase, 10) || 90;
+  if (tempoBase !== undefined && tempoBase !== null && tempoBase !== "") {
+    tempoBaseGlobal = parseInt(tempoBase, 10) || 90;
+  } else {
+    tempoBaseGlobal = inPlayMatchStatus === "KickOff" ? 45 : 90;
+  }
+
+  ensureCaptureWindows();
 
   historicoPorMinuto = {};
   historicoPercentual = [];
@@ -669,19 +772,39 @@ ipcMain.on("iniciar-captura", async (_event, payload) => {
     if (painel && !painel.isDestroyed()) {
       painel.webContents.send("erro", "Informe event_id e market_id para iniciar a captura.");
     }
-    return;
+    return source === "home" ? { ok: false, message: "eventId/marketId inválidos." } : undefined;
   }
 
   if (!urlTempo) {
     if (painel && !painel.isDestroyed()) {
       painel.webContents.send("erro", "Informe a URL do tempo para iniciar a captura.");
     }
-    return;
+    return source === "home" ? { ok: false, message: "URL do tempo é obrigatória." } : undefined;
   }
 
-  await tempoWindow.loadURL(urlTempo);
-  iniciarCaptura(eventId, marketId);
-});
+  try {
+    await tempoWindow.loadURL(urlTempo);
+    iniciarCaptura(eventId, marketId);
+
+    if (painel && !painel.isDestroyed()) {
+      painel.show();
+      painel.focus();
+    }
+    if (graficoWindow && !graficoWindow.isDestroyed()) graficoWindow.show();
+    if (volumeWindow && !volumeWindow.isDestroyed()) volumeWindow.show();
+
+    if (source === "home") {
+      clipboard.writeText(String(eventId));
+      return { ok: true };
+    }
+  } catch (err) {
+    const msg = err?.message || "Falha ao abrir URL do tempo.";
+    if (painel && !painel.isDestroyed()) {
+      painel.webContents.send("erro", msg);
+    }
+    if (source === "home") return { ok: false, message: msg };
+  }
+}
 
 // 🔹 ATUALIZAR ACRÉSCIMOS
 ipcMain.on("atualizar-acrescimos", (_event, novoValor) => {
@@ -826,37 +949,36 @@ function iniciarCaptura(eventId, marketId) {
       lastOdd = oddAtual;
 
       const prices = Array.isArray(underRunner.prices) ? underRunner.prices : [];
-      const toNum = (v) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : null;
-      };
+      const availableByOdd = new Map();
 
-      const apiBacks = prices
-        .filter(p => (p.side || "").toLowerCase() === "back")
-        .map(p => ({ odds: toNum(p.odds), amount: toNum(p["available-amount"]) }))
-        .filter(x => x.odds !== null && x.amount !== null);
+      for (const p of prices) {
+        const odds = toNumberOrNull(p?.odds);
+        const amount = toNumberOrNull(p?.["available-amount"]);
+        if (odds === null || amount === null) continue;
+        const key = Number(odds).toFixed(2);
+        availableByOdd.set(key, (availableByOdd.get(key) || 0) + amount);
+      }
 
-      const apiLays = prices
-        .filter(p => (p.side || "").toLowerCase() === "lay")
-        .map(p => ({ odds: toNum(p.odds), amount: toNum(p["available-amount"]) }))
-        .filter(x => x.odds !== null && x.amount !== null);
+      const { resistanceOdds, supportOdds, matchedOdd } = getTickOddsAround(oddAtual, 3);
 
-      apiBacks.sort((a, b) => b.odds - a.odds);
-      apiLays.sort((a, b) => a.odds - b.odds);
+      const resistanceTicks = resistanceOdds.map((odds) => {
+        const key = Number(odds).toFixed(2);
+        return { odds, amount: availableByOdd.get(key) || 0 };
+      });
 
-      const topApiBacks = apiBacks.slice(0, 12);
-      const topApiLays  = apiLays.slice(0, 12);
+      const supportTicks = supportOdds.map((odds) => {
+        const key = Number(odds).toFixed(2);
+        return { odds, amount: availableByOdd.get(key) || 0 };
+      });
 
-      const displayLays = topApiBacks.map(x => ({ side: "LAY", odds: x.odds, amount: x.amount }));
-      const displayBacks = topApiLays.map(x => ({ side: "BACK", odds: x.odds, amount: x.amount }));
+      const resistanceSum = resistanceTicks.reduce((acc, x) => acc + x.amount, 0);
+      const supportSum = supportTicks.reduce((acc, x) => acc + x.amount, 0);
 
-      const bookList = [
-        ...displayBacks.map(x => ({ ...x, _sortKey: 0 })),
-        ...displayLays.map(x => ({ ...x, _sortKey: 1 }))
-      ];
+      let zoneAdvantage = "equilibrado";
+      if (supportSum > resistanceSum) zoneAdvantage = "suporte";
+      else if (resistanceSum > supportSum) zoneAdvantage = "resistencia";
 
-      const bookBackSum = displayBacks.reduce((acc, x) => acc + x.amount, 0);
-      const bookLaySum  = displayLays.reduce((acc, x) => acc + x.amount, 0);
+      const zoneDiff = Math.abs(supportSum - resistanceSum);
 
       if (painel && !painel.isDestroyed()) {
         painel.webContents.send("atualizar-dados", {
@@ -890,19 +1012,22 @@ function iniciarCaptura(eventId, marketId) {
           tempo: tempoTxt || null,
           minuto: minutoAtual,
           odd: oddAtual,
-          bookList,
-          bookBacks: displayBacks,
-          bookLays: displayLays,
-          bookBackSum,
-          bookLaySum
+          matchedOdd,
+          resistanceTicks,
+          supportTicks,
+          resistanceSum,
+          supportSum,
+          zoneAdvantage,
+          zoneDiff
         });
       }
 
       console.log(
         "odd:", oddAtual,
         "| tempo:", tempoTxt,
-        "| bookBackSum:", bookBackSum,
-        "| bookLaySum:", bookLaySum
+        "| resistencia:", resistanceSum,
+        "| suporte:", supportSum,
+        "| vantagem:", zoneAdvantage
       );
 
     } catch (err) {
