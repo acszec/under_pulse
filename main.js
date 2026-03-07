@@ -723,7 +723,10 @@ ipcMain.handle("home-get-inplay", async () => {
     })
   );
 
-  return gamesWithMarket;
+  return gamesWithMarket.filter((g) => {
+    const runnerVol = Number(g?.market?.runnerVolume);
+    return Number.isFinite(runnerVol) && runnerVol >= 40000;
+  });
 });
 
 // 🔹 INICIAR CAPTURA

@@ -198,7 +198,7 @@
       flex-direction:column;
       gap:12px;
       overflow:hidden;
-      min-height:250px;
+      min-height:210px;
       transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
     }
 
@@ -282,6 +282,7 @@
       display:flex;
       justify-content:center;
       align-items:center;
+      gap:8px;
       min-width:0;
     }
 
@@ -374,6 +375,27 @@
       border-color: rgba(255,170,0,.28);
       color: rgba(255,170,0,.95);
     }
+    .minuteBadge{
+      font-size:12px;
+      font-weight:900;
+      padding:6px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.38);
+      color: rgba(255,255,255,.96);
+      letter-spacing:.2px;
+      white-space:nowrap;
+      text-align:center;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .minuteIcon{
+      font-size:12px;
+      line-height:1;
+      opacity:.98;
+    }
 
     .scoreboard{
       display:grid;
@@ -448,27 +470,23 @@
       min-width:120px;
       overflow:hidden;
     }
+    .midScore.selectable{
+      cursor:pointer;
+      transition: border-color .15s ease, box-shadow .15s ease, transform .05s ease;
+    }
+    .midScore.selectable:hover{
+      border-color: rgba(255,255,255,.32);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.10) inset;
+    }
+    .midScore.selectable:active{
+      transform: translateY(1px);
+    }
 
     .bigScore{
       font-size:30px;
       font-weight:1000;
       letter-spacing:.5px;
       line-height:1;
-    }
-
-    .smallMeta{
-      font-size:13px;
-      font-weight:800;
-      color:var(--minuteText);
-      margin-top:10px;
-      text-align:center;
-      white-space:nowrap;
-      min-height:18px;
-      letter-spacing:.2px;
-    }
-
-    .card.hot .smallMeta{
-      color: rgba(230,255,227,.94);
     }
 
     .marketBox{
@@ -915,6 +933,7 @@
         </div>
         <div class="topCenter">
           <span class="halfBadge ${half.cls}">${half.label}</span>
+          <span class="minuteBadge"><span class="minuteIcon">⏱</span>${clock ? clock : "--:--"}</span>
         </div>
         <div class="topRight">
           <span class="oddBadge"><span class="oddIcon">⚡</span><span>${fmtOdd(lastMatchedOdds)}</span></span>
@@ -936,12 +955,12 @@
       `;
 
       const midScore = document.createElement("div");
-      midScore.className = "midScore";
+      midScore.className = "midScore selectable";
       midScore.innerHTML = `
         <div class="goalChip">GOL!</div>
         <div class="bigScore">${homeScore} - ${awayScore}</div>
-        <div class="smallMeta">${clock ? `Minuto: ${clock}` : ""}</div>
       `;
+      midScore.title = "Clique no placar para selecionar este jogo";
 
       const rightCol = document.createElement("div");
       rightCol.className = "teamCol";
@@ -977,9 +996,7 @@
       inner.appendChild(scoreboard);
       inner.appendChild(marketBox);
 
-      const btn = document.createElement("button");
-      btn.innerText = "Selecionar jogo";
-      btn.addEventListener("click", async () => {
+      const handleSelectGame = async () => {
         try {
           if (!eventId || !marketId) {
             msgEl.innerText = "Esse jogo ainda não tem eventId/marketId válido.";
@@ -1001,8 +1018,7 @@
             throw new Error("homeApi.startCapture não existe no preload_home.js.");
           }
 
-          btn.disabled = true;
-          btn.innerText = "Iniciando...";
+          midScore.style.pointerEvents = "none";
 
           const result = await window.homeApi.startCapture({
             eventId,
@@ -1023,13 +1039,13 @@
           msgEl.style.display = "block";
           setTimeout(() => (msgEl.style.display = "none"), 2600);
         } finally {
-          btn.disabled = false;
-          btn.innerText = "Selecionar jogo";
+          midScore.style.pointerEvents = "auto";
         }
-      });
+      };
+
+      midScore.addEventListener("click", handleSelectGame);
 
       card.appendChild(inner);
-      card.appendChild(btn);
 
       if (eventId) {
         const prev = lastScores.get(eventId);
