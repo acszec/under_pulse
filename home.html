@@ -797,6 +797,11 @@
         maximumFractionDigits: 2
       });
     }
+    function fmtDisplayedVolume(x){
+      const n = Number(x);
+      if (!Number.isFinite(n)) return "--";
+      return fmtNumber(n * 3);
+    }
     function fmtOdd(x){
       const n = Number(x);
       if (!Number.isFinite(n)) return "--";
@@ -984,11 +989,11 @@
         </div>
         <div class="marketItem">
           <div class="marketLabel">Volume Runner</div>
-          <div class="marketValue">R$ ${fmtNumber(runnerVolume)}</div>
+          <div class="marketValue">R$ ${fmtDisplayedVolume(runnerVolume)}</div>
         </div>
         <div class="marketItem">
           <div class="marketLabel">Volume Total</div>
-          <div class="marketValue">R$ ${fmtNumber(marketVolume)}</div>
+          <div class="marketValue">R$ ${fmtDisplayedVolume(marketVolume)}</div>
         </div>
       `;
 
@@ -1132,7 +1137,7 @@
     }
 
     refresh();
-    setInterval(refresh, 5000);
+    setInterval(refresh, 20000);
   </script>
 </body>
 </html>

@@ -69,6 +69,13 @@ h3{
 <script>
 const erroEl = document.getElementById("erro");
 
+function fmtOdd(value) {
+  if (value === null || value === undefined) return "--";
+  const odd = Number(value);
+  if (!Number.isFinite(odd)) return "--";
+  return odd.toFixed(2);
+}
+
 if (!window.api) {
   erroEl.innerText = "ERRO: window.api não existe (preload não carregou). Verifique o preload.js no main.";
 }
@@ -81,7 +88,7 @@ window.api?.onAtualizarDados((dados)=>{
   const mediaGeralEl = document.getElementById("mediaGeral");
   const tendenciaEl = document.getElementById("tendencia");
 
-  oddEl.innerText = dados.odd ?? "--";
+  oddEl.innerText = fmtOdd(dados.odd);
   tempoEl.innerText = dados.tempo ?? "--:--";
 
   if (dados.percentual !== null && dados.percentual !== undefined) {
