@@ -126,7 +126,7 @@
     const rect = el.getBoundingClientRect();
     stopPip();
     selectedEl = el;
-    const SCALE = 2;
+    const SCALE = 1.5;
     const pipW  = Math.max(Math.round(rect.width)  || 220, 120) * SCALE;
     const pipH  = Math.max(Math.round(rect.height) || 80,  40)  * SCALE;
 
@@ -162,7 +162,7 @@
 
     await updatePip();
 
-    updateTimer = setInterval(updatePip, 500);
+    updateTimer = setInterval(updatePip, 1500);
     pipWin.addEventListener("pagehide", stopPip);
   }
 

@@ -4,6 +4,7 @@
   "version": "1.0",
   "description": "Selecione qualquer elemento da página e exiba em Picture-in-Picture flutuante",
   "permissions": ["activeTab", "tabs", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
