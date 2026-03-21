@@ -1,4 +1,7 @@
 (() => {
+  if (window.__underPulsePipLoaded) return;
+  window.__underPulsePipLoaded = true;
+
   let pipVideo    = null;
   let pipCanvas   = null;
   let pipCtx      = null;

@@ -3,7 +3,7 @@
   "name": "Under Pulse PiP",
   "version": "1.0",
   "description": "Selecione qualquer elemento da página e exiba em Picture-in-Picture flutuante",
-  "permissions": ["activeTab", "tabs"],
+  "permissions": ["activeTab", "tabs", "scripting"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Under Pulse PiP"
