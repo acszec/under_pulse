@@ -150,8 +150,8 @@
         overflow:hidden;
       }
       img {
-        max-width:100%; max-height:100%;
-        object-fit:contain;
+        width:100%; height:100%;
+        object-fit:fill;
         image-rendering:crisp-edges;
       }
     `;
