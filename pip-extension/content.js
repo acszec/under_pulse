@@ -110,9 +110,9 @@
   function setupVideo() {
     if (pipVideo && !pipVideo.paused) return; // já está tocando
 
-    pipCanvas       = document.createElement("canvas");
-    pipCanvas.width = 320;
-    pipCanvas.height = 100;
+    pipCanvas        = document.createElement("canvas");
+    pipCanvas.width  = 640;
+    pipCanvas.height = 80;
     pipCtx = pipCanvas.getContext("2d");
 
     // placeholder inicial
@@ -151,7 +151,7 @@
     const text = selectedEl
       ? (selectedEl.textContent || "").trim().replace(/\s+/g, " ")
       : "";
-    const w = 320, h = 100;
+    const w = 640, h = 80;
 
     pipCtx.fillStyle = "#0f0f0f";
     pipCtx.fillRect(0, 0, w, h);
