@@ -109,8 +109,10 @@
 
     updateTimer = setInterval(renderCanvas, 300);
 
-    observer = new MutationObserver(renderCanvas);
-    observer.observe(selectedEl, { childList: true, subtree: true, characterData: true });
+    if (selectedEl instanceof Node) {
+      observer = new MutationObserver(renderCanvas);
+      observer.observe(selectedEl, { childList: true, subtree: true, characterData: true });
+    }
 
     pipVideo.addEventListener("leavepictureinpicture", stopPip);
   }
