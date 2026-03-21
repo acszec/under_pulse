@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 210px;
+      padding: 14px;
+      background: #1a1a1a;
+      color: #fff;
+      font-family: Arial, system-ui, sans-serif;
+    }
+    h4 {
+      font-size: 13px;
+      color: rgba(255,255,255,.6);
+      margin-bottom: 12px;
+      letter-spacing: .3px;
+    }
+    button {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 7px;
+      border: 1px solid;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: bold;
+      transition: background .15s;
+    }
+    .btn-select {
+      background: rgba(255,170,0,.15);
+      border-color: rgba(255,170,0,.45);
+      color: #ffaa00;
+    }
+    .btn-select:hover { background: rgba(255,170,0,.28); }
+
+    .btn-stop {
+      background: rgba(255,80,80,.10);
+      border-color: rgba(255,80,80,.35);
+      color: #ff7070;
+      margin-top: 8px;
+    }
+    .btn-stop:hover { background: rgba(255,80,80,.22); }
+
+    .hint {
+      font-size: 10px;
+      color: rgba(255,255,255,.35);
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h4>Under Pulse PiP</h4>
+  <button id="btnSelect" class="btn-select">Selecionar elemento</button>
+  <button id="btnStop"   class="btn-stop">Fechar PiP</button>
+  <p class="hint">Clique em "Selecionar elemento", depois clique sobre a odd na página.</p>
+  <script src="popup.js"></script>
+</body>
+</html>

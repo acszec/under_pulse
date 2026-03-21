@@ -3,8 +3,6 @@ const { contextBridge, ipcRenderer, clipboard } = require("electron");
 contextBridge.exposeInMainWorld("api", {
   iniciarCaptura: (dados) => ipcRenderer.send("iniciar-captura", dados),
   atualizarAcrescimos: (valor) => ipcRenderer.send("atualizar-acrescimos", valor),
-  getSources: () => ipcRenderer.invoke("espelho-get-sources"),
-
   onAtualizarDados: (callback) =>
     ipcRenderer.on("atualizar-dados", (_event, dados) => callback(dados)),
 

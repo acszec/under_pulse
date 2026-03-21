@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, net, session, clipboard, desktopCapturer } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, net, session, clipboard } = require("electron");
 const path = require("path");
 
 let painel;
@@ -609,16 +609,17 @@ function ensureEspelhoWindow() {
   }
 
   espelhoWindow = new BrowserWindow({
-    width: 420,
-    height: 280,
-    minWidth: 160,
-    minHeight: 80,
+    width: 480,
+    height: 320,
+    minWidth: 200,
+    minHeight: 120,
     frame: false,
     alwaysOnTop: true,
     resizable: true,
     webPreferences: {
       preload: path.join(__dirname, "preload_espelho.js"),
-      contextIsolation: true
+      contextIsolation: true,
+      webviewTag: true
     }
   });
 
@@ -754,18 +755,6 @@ ipcMain.handle("home-open-layback-login", async () => {
 ipcMain.handle("home-open-espelho", () => {
   ensureEspelhoWindow();
   return { ok: true };
-});
-
-ipcMain.handle("espelho-get-sources", async () => {
-  const sources = await desktopCapturer.getSources({
-    types: ["window", "screen"],
-    thumbnailSize: { width: 300, height: 180 }
-  });
-  return sources.map(s => ({
-    id: s.id,
-    name: s.name,
-    thumbnail: s.thumbnail.toDataURL()
-  }));
 });
 
 ipcMain.on("espelho-close",    () => { if (espelhoWindow && !espelhoWindow.isDestroyed()) espelhoWindow.close(); });
