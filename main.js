@@ -45,21 +45,25 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchJsonFromLoggedWindow(url) {
-  if (!laybackWindow || laybackWindow.isDestroyed()) {
-    throw new Error("Janela logada não está disponível.");
-  }
-
-  return await laybackWindow.webContents.executeJavaScript(`
-    fetch(${JSON.stringify(url)}, {
-      credentials: "include"
-    }).then(async (r) => {
-      if (!r.ok) {
-        throw new Error("HTTP " + r.status);
+function fetchJsonFromLoggedWindow(url) {
+  return new Promise((resolve, reject) => {
+    const ses = session.fromPartition("persist:main");
+    const req = net.request({ url, method: "GET", session: ses });
+    let raw = "";
+    req.on("response", (res) => {
+      if (res.statusCode === 401 || res.statusCode === 403) {
+        openLaybackLoginWindow();
+        return reject(new Error(`HTTP ${res.statusCode}`));
       }
-      return r.json();
-    })
-  `);
+      res.on("data", (chunk) => (raw += chunk.toString("utf-8")));
+      res.on("end", () => {
+        try { resolve(JSON.parse(raw)); }
+        catch (e) { reject(new Error("JSON parse: " + e.message)); }
+      });
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 function processLoggedRequestQueue() {
@@ -84,9 +88,8 @@ function processLoggedRequestQueue() {
         await sleep(120);
       } catch (err) {
         const errMsg = String(err?.message || "");
-        if ((errMsg.includes("HTTP 401") || errMsg.includes("HTTP 403")) && laybackWindow && !laybackWindow.isDestroyed()) {
-          laybackWindow.show();
-          laybackWindow.focus();
+        if (errMsg.includes("HTTP 401") || errMsg.includes("HTTP 403")) {
+          openLaybackLoginWindow();
         }
         job.reject(err);
       } finally {
@@ -232,32 +235,6 @@ function parseMinutoDoTextoTempo(tempoTxt) {
   if (!m) return 0;
   const minuto = parseInt(m[1], 10);
   return Number.isFinite(minuto) ? minuto : 0;
-}
-
-/**
- * ✅ Busca JSON usando a session/partition persist:main
- * Mantida apenas se você quiser usar em endpoints públicos no futuro.
- */
-function requestJsonWithPersistSession(url) {
-  return new Promise((resolve, reject) => {
-    const ses = session.fromPartition("persist:main");
-    const req = net.request({ url, method: "GET", session: ses });
-
-    let raw = "";
-    req.on("response", (res) => {
-      res.on("data", (chunk) => (raw += chunk.toString("utf-8")));
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(raw));
-        } catch (e) {
-          reject(new Error("Falha ao parsear JSON: " + e.message));
-        }
-      });
-    });
-
-    req.on("error", (err) => reject(err));
-    req.end();
-  });
 }
 
 /**
@@ -533,19 +510,6 @@ async function getEventUnderMarketByScore(eventId, totalGoals, inPlayMatchStatus
 }
 
 function createStartupWindows() {
-  // 🔹 JANELA LAYBACK (login)
-  laybackWindow = new BrowserWindow({
-    show: false,
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      partition: "persist:main",
-      contextIsolation: false
-    }
-  });
-  laybackWindow.loadURL("https://laybacksoftware.bolsadeaposta.bet.br/");
-  attachContextMenu(laybackWindow);
-
   // 🔹 JANELA OCULTA PARA TEMPO
   tempoWindow = new BrowserWindow({
     show: false,
@@ -637,9 +601,24 @@ function ensureCaptureWindows() {
 }
 
 function openLaybackLoginWindow() {
-  if (!laybackWindow || laybackWindow.isDestroyed()) return false;
-  laybackWindow.show();
-  laybackWindow.focus();
+  if (laybackWindow && !laybackWindow.isDestroyed()) {
+    laybackWindow.show();
+    laybackWindow.focus();
+    return true;
+  }
+
+  laybackWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    parent: homeWindow || undefined,
+    webPreferences: {
+      partition: "persist:main",
+      contextIsolation: false
+    }
+  });
+  laybackWindow.loadURL("https://laybacksoftware.bolsadeaposta.bet.br/");
+  attachContextMenu(laybackWindow);
+  laybackWindow.on("closed", () => (laybackWindow = null));
   return true;
 }
 
@@ -820,11 +799,7 @@ function iniciarCaptura(eventId, marketId) {
   intervalId = setInterval(async () => {
     try {
       const [data, tempoTxt] = await Promise.all([
-        laybackWindow.webContents.executeJavaScript(`
-          fetch("https://mexchange-api.bolsadeaposta.bet.br/api/events/${eventId}?market-ids=${marketId}&price-depth=350", {
-            credentials: "include"
-          }).then(r => r.json())
-        `),
+        fetchJsonFromLoggedWindow(`https://mexchange-api.bolsadeaposta.bet.br/api/events/${eventId}?market-ids=${marketId}&price-depth=350`),
 
         tempoWindow.webContents.executeJavaScript(`
           (function(){
