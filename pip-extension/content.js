@@ -128,12 +128,34 @@
         overflow:hidden;
         text-overflow:ellipsis;
       }
+      #dbg {
+        color:rgba(255,255,255,.4);
+        font-family:monospace;
+        font-size:8px;
+        padding:2px 4px;
+        word-break:break-all;
+        max-width:100%;
+      }
     `;
     pipWin.document.head.appendChild(style);
 
     pipEl = pipWin.document.createElement("div");
     pipEl.id = "val";
     pipWin.document.body.appendChild(pipEl);
+
+    const dbg = pipWin.document.createElement("div");
+    dbg.id = "dbg";
+    pipWin.document.body.appendChild(dbg);
+
+    // mostra info de debug no console
+    if (selectedEl) {
+      console.log("[PiP] tagName:", selectedEl.tagName);
+      console.log("[PiP] className:", selectedEl.className);
+      console.log("[PiP] innerText:", JSON.stringify(selectedEl.innerText));
+      console.log("[PiP] textContent:", JSON.stringify(selectedEl.textContent));
+      console.log("[PiP] innerHTML:", selectedEl.innerHTML.slice(0, 300));
+      console.log("[PiP] attributes:", [...selectedEl.attributes].map(a => `${a.name}="${a.value}"`).join(", "));
+    }
 
     updatePip();
 
@@ -149,7 +171,13 @@
 
   function updatePip() {
     if (!pipEl || !selectedEl) return;
-    pipEl.textContent = (selectedEl.textContent || "").trim().replace(/\s+/g, " ");
+    const inner = (selectedEl.innerText   || "").trim().replace(/\s+/g, " ");
+    const tc    = (selectedEl.textContent || "").trim().replace(/\s+/g, " ");
+    const text  = inner || tc;
+    pipEl.textContent = text || "—";
+
+    const dbg = pipWin?.document.getElementById("dbg");
+    if (dbg) dbg.textContent = `tag:${selectedEl.tagName} | inner:${JSON.stringify(inner)} | tc:${JSON.stringify(tc)}`;
   }
 
   // ── Para PiP ───────────────────────────────────────────
