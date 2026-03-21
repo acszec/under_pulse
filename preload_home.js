@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld("homeApi", {
 
   // ✅ abre/foca janela de login do Layback
   openLaybackLogin: () => ipcRenderer.invoke("home-open-layback-login"),
+
+  // ✅ abre espelho de tela (always on top)
+  openEspelho: () => ipcRenderer.invoke("home-open-espelho"),
 });

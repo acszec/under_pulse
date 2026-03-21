@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, Menu, net, session, clipboard } = require("electron");
+const { app, BrowserWindow, ipcMain, Menu, net, session, clipboard, desktopCapturer } = require("electron");
 const path = require("path");
 
 let painel;
 let laybackWindow;
+let espelhoWindow;
 let tempoWindow;
 let graficoWindow;
 let volumeWindow;
@@ -600,6 +601,33 @@ function ensureCaptureWindows() {
   ensureVolumeWindow();
 }
 
+function ensureEspelhoWindow() {
+  if (espelhoWindow && !espelhoWindow.isDestroyed()) {
+    espelhoWindow.show();
+    espelhoWindow.focus();
+    return espelhoWindow;
+  }
+
+  espelhoWindow = new BrowserWindow({
+    width: 420,
+    height: 280,
+    minWidth: 160,
+    minHeight: 80,
+    frame: false,
+    alwaysOnTop: true,
+    resizable: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload_espelho.js"),
+      contextIsolation: true
+    }
+  });
+
+  espelhoWindow.loadFile(path.join(__dirname, "espelho.html"));
+  espelhoWindow.on("closed", () => (espelhoWindow = null));
+  attachContextMenu(espelhoWindow);
+  return espelhoWindow;
+}
+
 function openLaybackLoginWindow() {
   if (laybackWindow && !laybackWindow.isDestroyed()) {
     laybackWindow.show();
@@ -722,6 +750,26 @@ ipcMain.handle("home-open-layback-login", async () => {
   if (!ok) return { ok: false, message: "Janela do Layback não está disponível." };
   return { ok: true };
 });
+
+ipcMain.handle("home-open-espelho", () => {
+  ensureEspelhoWindow();
+  return { ok: true };
+});
+
+ipcMain.handle("espelho-get-sources", async () => {
+  const sources = await desktopCapturer.getSources({
+    types: ["window", "screen"],
+    thumbnailSize: { width: 300, height: 180 }
+  });
+  return sources.map(s => ({
+    id: s.id,
+    name: s.name,
+    thumbnail: s.thumbnail.toDataURL()
+  }));
+});
+
+ipcMain.on("espelho-close",    () => { if (espelhoWindow && !espelhoWindow.isDestroyed()) espelhoWindow.close(); });
+ipcMain.on("espelho-minimize", () => { if (espelhoWindow && !espelhoWindow.isDestroyed()) espelhoWindow.minimize(); });
 
 async function startCaptureFromPayload(payload, opts = {}) {
   const { eventId, marketId, urlTempo, acrescimos, tempoBase, inPlayMatchStatus } = payload || {};

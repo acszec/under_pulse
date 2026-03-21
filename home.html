@@ -699,6 +699,7 @@
       <div class="pills">
         <div class="pill" id="statusPill">Atualizando...</div>
         <div class="pill" id="countPill">0 jogos</div>
+        <button id="btnEspelho" class="pill pillBtn" type="button">Espelho</button>
         <div class="pill filter active" data-filter="all">Todos</div>
         <div class="pill filter" data-filter="first">1º Tempo</div>
         <div class="pill filter" data-filter="second">2º Tempo</div>
@@ -754,6 +755,10 @@
     const tempoModalCancel = document.getElementById("tempoModalCancel");
     let filtroTempo = "all";
     let termoBusca = "";
+
+    document.getElementById("btnEspelho").addEventListener("click", () => {
+      window.homeApi?.openEspelho();
+    });
 
     document.querySelectorAll(".filter").forEach(el => {
       el.addEventListener("click", () => {

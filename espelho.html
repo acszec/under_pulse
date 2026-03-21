@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Espelho</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111;
+      color: #fff;
+      font-family: Arial, system-ui, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── barra de título ── */
+    .drag-bar {
+      -webkit-app-region: drag;
+      height: 28px;
+      background: rgba(255,255,255,.06);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+    .drag-bar-title {
+      font-size: 11px;
+      color: rgba(255,255,255,.55);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: calc(100% - 60px);
+    }
+    .drag-bar-btns {
+      -webkit-app-region: no-drag;
+      display: flex;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .bar-btn {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .btn-close    { background: #ff5f57; color: #900; }
+    .btn-source   { background: rgba(255,255,255,.18); color: #fff; }
+
+    /* ── conteúdo ── */
+    .phase { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* ── seleção de fonte ── */
+    #sourcePicker {
+      padding: 12px;
+      overflow-y: auto;
+    }
+    .picker-hint {
+      font-size: 11px;
+      color: rgba(255,255,255,.45);
+      margin-bottom: 10px;
+    }
+    .sources-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+    }
+    .source-item {
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.10);
+      overflow: hidden;
+      background: rgba(255,255,255,.03);
+      transition: border-color .15s;
+    }
+    .source-item:hover { border-color: rgba(0,255,136,.55); }
+    .source-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+    .source-name {
+      font-size: 10px;
+      padding: 4px 6px;
+      color: rgba(255,255,255,.65);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── seleção de região ── */
+    #regionSelector {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+    #regionVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    #selectionOverlay {
+      position: absolute;
+      inset: 0;
+      cursor: crosshair;
+    }
+    .region-hint {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: rgba(255,255,255,.75);
+      background: rgba(0,0,0,.65);
+      padding: 4px 12px;
+      border-radius: 6px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* ── espelho ── */
+    #mirror {
+      flex: 1;
+      overflow: hidden;
+    }
+    #mirrorCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="drag-bar">
+    <span class="drag-bar-title" id="barTitle">Espelho — Selecione a fonte</span>
+    <div class="drag-bar-btns">
+      <button class="bar-btn btn-source" id="btnSource" title="Trocar fonte">↺</button>
+      <button class="bar-btn btn-close"  id="btnClose"  title="Fechar">✕</button>
+    </div>
+  </div>
+
+  <!-- Fase 1: selecionar fonte -->
+  <div id="sourcePicker" class="phase">
+    <div class="picker-hint">Selecione a janela ou tela para espelhar</div>
+    <div id="sourcesGrid" class="sources-grid"></div>
+  </div>
+
+  <!-- Fase 2: selecionar região -->
+  <div id="regionSelector" class="phase" style="display:none;">
+    <video id="regionVideo" autoplay muted playsinline></video>
+    <canvas id="selectionOverlay"></canvas>
+    <div class="region-hint" id="regionHint">Arraste para selecionar a região da odd</div>
+  </div>
+
+  <!-- Fase 3: espelho -->
+  <div id="mirror" class="phase" style="display:none;">
+    <canvas id="mirrorCanvas"></canvas>
+  </div>
+
+  <script>
+    const sourcePicker    = document.getElementById("sourcePicker");
+    const regionSelector  = document.getElementById("regionSelector");
+    const mirrorDiv       = document.getElementById("mirror");
+    const sourcesGrid     = document.getElementById("sourcesGrid");
+    const regionVideo     = document.getElementById("regionVideo");
+    const selectionOverlay = document.getElementById("selectionOverlay");
+    const mirrorCanvas    = document.getElementById("mirrorCanvas");
+    const mirrorCtx       = mirrorCanvas.getContext("2d");
+    const barTitle        = document.getElementById("barTitle");
+    const regionHint      = document.getElementById("regionHint");
+
+    let stream     = null;
+    let cropRegion = null;
+    let rafId      = null;
+
+    // ── utilitário de fase ──────────────────────────────
+    function showPhase(phase) {
+      sourcePicker.style.display   = phase === "source" ? "flex" : "none";
+      regionSelector.style.display = phase === "region" ? "flex" : "none";
+      mirrorDiv.style.display      = phase === "mirror" ? "flex" : "none";
+    }
+
+    // ── Fase 1: carregar fontes ──────────────────────────
+    async function loadSources() {
+      sourcesGrid.innerHTML = "<div style='color:rgba(255,255,255,.35);font-size:11px;'>Carregando...</div>";
+      try {
+        const sources = await window.espelhoApi.getSources();
+        sourcesGrid.innerHTML = "";
+        sources.forEach(src => {
+          const item = document.createElement("div");
+          item.className = "source-item";
+          item.innerHTML = `
+            <img class="source-thumb" src="${src.thumbnail}" />
+            <div class="source-name">${src.name}</div>
+          `;
+          item.addEventListener("click", () => startCapture(src.id, src.name));
+          sourcesGrid.appendChild(item);
+        });
+      } catch (e) {
+        sourcesGrid.innerHTML = `<div style='color:#ff6b6b;font-size:11px;'>${e.message}</div>`;
+      }
+    }
+
+    // ── Fase 2: capturar stream e selecionar região ──────
+    async function startCapture(sourceId, sourceName) {
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource: "desktop",
+            chromeMediaSourceId: sourceId,
+            minFrameRate: 30
+          }
+        }
+      });
+
+      regionVideo.srcObject = stream;
+      await new Promise(r => { regionVideo.onloadedmetadata = r; });
+
+      barTitle.textContent = `Espelho — ${sourceName}`;
+      showPhase("region");
+      setupRegionSelector();
+    }
+
+    // ── Seleção de região com drag ───────────────────────
+    function setupRegionSelector() {
+      const overlay = selectionOverlay;
+      const ctx = overlay.getContext("2d");
+
+      function syncOverlaySize() {
+        overlay.width  = regionSelector.offsetWidth;
+        overlay.height = regionSelector.offsetHeight;
+      }
+      syncOverlaySize();
+      new ResizeObserver(syncOverlaySize).observe(regionSelector);
+
+      let dragging = false;
+      let sx = 0, sy = 0, ex = 0, ey = 0;
+
+      function drawRect() {
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        const x = Math.min(sx, ex);
+        const y = Math.min(sy, ey);
+        const w = Math.abs(ex - sx);
+        const h = Math.abs(ey - sy);
+        if (w < 2 || h < 2) return;
+        ctx.strokeStyle = "#00ff88";
+        ctx.lineWidth   = 2;
+        ctx.fillStyle   = "rgba(0,255,136,.08)";
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      overlay.addEventListener("mousedown", e => {
+        dragging = true;
+        const r = overlay.getBoundingClientRect();
+        sx = ex = e.clientX - r.left;
+        sy = ey = e.clientY - r.top;
+        regionHint.style.display = "none";
+      });
+
+      overlay.addEventListener("mousemove", e => {
+        if (!dragging) return;
+        const r = overlay.getBoundingClientRect();
+        ex = e.clientX - r.left;
+        ey = e.clientY - r.top;
+        drawRect();
+      });
+
+      overlay.addEventListener("mouseup", e => {
+        if (!dragging) return;
+        dragging = false;
+        const r = overlay.getBoundingClientRect();
+        ex = e.clientX - r.left;
+        ey = e.clientY - r.top;
+
+        const selW = Math.abs(ex - sx);
+        const selH = Math.abs(ey - sy);
+        if (selW < 10 || selH < 10) {
+          regionHint.textContent = "Área muito pequena, tente novamente";
+          regionHint.style.display = "block";
+          return;
+        }
+
+        // converte coordenadas overlay → coordenadas do vídeo real
+        // (considerando letterbox do object-fit: contain)
+        const vw = regionVideo.videoWidth;
+        const vh = regionVideo.videoHeight;
+        const ow = overlay.width;
+        const oh = overlay.height;
+
+        const videoAspect   = vw / vh;
+        const overlayAspect = ow / oh;
+        let renderW, renderH, offX, offY;
+
+        if (videoAspect > overlayAspect) {
+          renderW = ow;
+          renderH = ow / videoAspect;
+          offX = 0;
+          offY = (oh - renderH) / 2;
+        } else {
+          renderH = oh;
+          renderW = oh * videoAspect;
+          offX = (ow - renderW) / 2;
+          offY = 0;
+        }
+
+        const scaleX = vw / renderW;
+        const scaleY = vh / renderH;
+
+        cropRegion = {
+          x: (Math.min(sx, ex) - offX) * scaleX,
+          y: (Math.min(sy, ey) - offY) * scaleY,
+          w: selW * scaleX,
+          h: selH * scaleY
+        };
+
+        startMirror();
+      });
+    }
+
+    // ── Fase 3: renderizar espelho em tempo real ─────────
+    function startMirror() {
+      showPhase("mirror");
+      if (rafId) cancelAnimationFrame(rafId);
+
+      function renderFrame() {
+        const cw = mirrorCanvas.offsetWidth;
+        const ch = mirrorCanvas.offsetHeight;
+        if (mirrorCanvas.width !== cw)  mirrorCanvas.width  = cw;
+        if (mirrorCanvas.height !== ch) mirrorCanvas.height = ch;
+
+        if (cropRegion && regionVideo.readyState >= 2) {
+          mirrorCtx.drawImage(
+            regionVideo,
+            cropRegion.x, cropRegion.y, cropRegion.w, cropRegion.h,
+            0, 0, cw, ch
+          );
+        }
+        rafId = requestAnimationFrame(renderFrame);
+      }
+      renderFrame();
+    }
+
+    // ── Botões da barra ──────────────────────────────────
+    document.getElementById("btnClose").addEventListener("click", () => {
+      window.espelhoApi.close();
+    });
+
+    document.getElementById("btnSource").addEventListener("click", () => {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      cropRegion = null;
+      barTitle.textContent = "Espelho — Selecione a fonte";
+      showPhase("source");
+      loadSources();
+    });
+
+    // ── Iniciar ──────────────────────────────────────────
+    loadSources();
+  </script>
+</body>
+</html>
