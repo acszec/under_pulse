@@ -4,17 +4,19 @@
 <meta charset="UTF-8">
 <title>Painel Under</title>
 <style>
+*{ box-sizing:border-box; }
 body{
-  font-family: Arial;
+  font-family: Arial, system-ui, sans-serif;
   text-align:center;
   background:#111;
   color:#fff;
   margin:0;
-  padding:16px 12px;
+  padding:16px 12px 12px;
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
 }
-h3{
-  margin:0;
-}
+h3{ margin:0; }
 .subtitle{
   margin-top:8px;
   color:#bbb;
@@ -22,12 +24,13 @@ h3{
 }
 #tempo{
   font-size:30px;
-  margin-top:25px;
+  margin-top:20px;
 }
 #odd{
   font-size:70px;
-  margin-top:15px;
+  margin-top:10px;
   color:#00ff88;
+  line-height:1;
 }
 #percentual{
   font-size:25px;
@@ -49,13 +52,14 @@ h3{
 }
 #erro{
   color:red;
-  margin-top:10px;
+  margin-top:8px;
+  font-size:13px;
 }
 .acrescimos-box{
   display:inline-flex;
   align-items:center;
   gap:8px;
-  margin-top:18px;
+  margin-top:16px;
   background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.12);
   border-radius:10px;
@@ -80,6 +84,163 @@ h3{
 .acrescimos-box input:focus{
   border-color:rgba(0,255,136,.5);
 }
+
+/* ── espelho ── */
+.mirror-toggle{
+  margin-top:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  cursor:pointer;
+  color:rgba(255,255,255,.45);
+  font-size:12px;
+  user-select:none;
+}
+.mirror-toggle:hover{ color:rgba(255,255,255,.7); }
+.mirror-toggle-line{
+  flex:1;
+  height:1px;
+  background:rgba(255,255,255,.10);
+}
+.mirror-toggle-btn{
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:6px;
+  color:rgba(255,255,255,.55);
+  font-size:11px;
+  padding:3px 10px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.mirror-toggle-btn:hover{
+  background:rgba(0,255,136,.10);
+  border-color:rgba(0,255,136,.30);
+  color:#d6ffe8;
+}
+
+#mirrorSection{
+  margin-top:10px;
+  flex:1;
+  display:none;
+  flex-direction:column;
+  min-height:180px;
+}
+#mirrorSection.open{ display:flex; }
+
+/* canvas do espelho */
+#mirrorCanvas{
+  flex:1;
+  width:100%;
+  display:block;
+  border-radius:8px;
+  background:#000;
+  cursor:pointer;
+}
+.mirror-hint{
+  font-size:11px;
+  color:rgba(255,255,255,.4);
+  margin-top:6px;
+}
+
+/* ── overlay de seleção (fonte + região) ── */
+.overlay{
+  position:fixed;
+  inset:0;
+  z-index:100;
+  background:rgba(0,0,0,.88);
+  display:none;
+  flex-direction:column;
+}
+.overlay.open{ display:flex; }
+
+.overlay-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 12px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+  flex-shrink:0;
+}
+.overlay-title{
+  font-size:13px;
+  font-weight:700;
+}
+.overlay-close{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:6px;
+  color:#fff;
+  font-size:11px;
+  padding:3px 10px;
+  cursor:pointer;
+}
+.overlay-close:hover{ background:rgba(255,80,80,.2); }
+
+/* grade de fontes */
+#sourcesGrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(120px,1fr));
+  gap:8px;
+  padding:12px;
+  overflow-y:auto;
+  flex:1;
+}
+.source-item{
+  cursor:pointer;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,.10);
+  overflow:hidden;
+  background:rgba(255,255,255,.03);
+  transition:border-color .15s;
+}
+.source-item:hover{ border-color:rgba(0,255,136,.5); }
+.source-thumb{
+  width:100%;
+  aspect-ratio:16/9;
+  object-fit:cover;
+  display:block;
+  background:#000;
+}
+.source-name{
+  font-size:10px;
+  padding:4px 6px;
+  color:rgba(255,255,255,.65);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* seleção de região */
+#regionContainer{
+  flex:1;
+  position:relative;
+  overflow:hidden;
+}
+#regionVideo{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  display:block;
+}
+#regionOverlay{
+  position:absolute;
+  inset:0;
+  cursor:crosshair;
+}
+.region-hint{
+  position:absolute;
+  bottom:10px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:11px;
+  color:rgba(255,255,255,.75);
+  background:rgba(0,0,0,.65);
+  padding:4px 12px;
+  border-radius:6px;
+  pointer-events:none;
+  white-space:nowrap;
+}
 </style>
 </head>
 <body>
@@ -102,7 +263,43 @@ h3{
 
 <div id="erro"></div>
 
+<!-- toggle espelho -->
+<div class="mirror-toggle" id="mirrorToggle">
+  <div class="mirror-toggle-line"></div>
+  <button class="mirror-toggle-btn" type="button" id="btnMirrorToggle">+ Espelho</button>
+  <div class="mirror-toggle-line"></div>
+</div>
+
+<!-- seção do espelho -->
+<div id="mirrorSection">
+  <canvas id="mirrorCanvas" title="Clique para selecionar fonte"></canvas>
+  <div class="mirror-hint" id="mirrorHint">Clique para selecionar a fonte</div>
+</div>
+
+<!-- overlay: seleção de fonte -->
+<div id="sourceOverlay" class="overlay">
+  <div class="overlay-bar">
+    <span class="overlay-title">Selecione a janela ou tela</span>
+    <button class="overlay-close" id="btnSourceClose">Cancelar</button>
+  </div>
+  <div id="sourcesGrid"></div>
+</div>
+
+<!-- overlay: seleção de região -->
+<div id="regionOverlayWrap" class="overlay">
+  <div class="overlay-bar">
+    <span class="overlay-title" id="regionOverlayTitle">Selecione a região</span>
+    <button class="overlay-close" id="btnRegionClose">Cancelar</button>
+  </div>
+  <div id="regionContainer">
+    <video id="regionVideo" autoplay muted playsinline></video>
+    <canvas id="regionOverlay"></canvas>
+    <div class="region-hint" id="regionHint">Arraste para selecionar a região da odd</div>
+  </div>
+</div>
+
 <script>
+// ── dados ────────────────────────────────────────────────
 const erroEl = document.getElementById("erro");
 
 function fmtOdd(value) {
@@ -113,66 +310,234 @@ function fmtOdd(value) {
 }
 
 if (!window.api) {
-  erroEl.innerText = "ERRO: window.api não existe (preload não carregou). Verifique o preload.js no main.";
+  erroEl.innerText = "ERRO: window.api não existe. Verifique o preload.js.";
 }
 
 const acrescimosInput = document.getElementById("acrescimosInput");
 acrescimosInput.addEventListener("change", () => {
   const val = parseInt(acrescimosInput.value, 10);
-  if (Number.isFinite(val) && val >= 0) {
-    window.api?.atualizarAcrescimos(val);
-  }
+  if (Number.isFinite(val) && val >= 0) window.api?.atualizarAcrescimos(val);
 });
 
-window.api?.onAtualizarDados((dados)=>{
-  const oddEl = document.getElementById("odd");
-  const tempoEl = document.getElementById("tempo");
-  const percentualEl = document.getElementById("percentual");
-  const mediaEl = document.getElementById("media");
-  const mediaGeralEl = document.getElementById("mediaGeral");
-  const tendenciaEl = document.getElementById("tendencia");
-
-  oddEl.innerText = fmtOdd(dados.odd);
-  tempoEl.innerText = dados.tempo ?? "--:--";
+window.api?.onAtualizarDados((dados) => {
+  document.getElementById("odd").innerText      = fmtOdd(dados.odd);
+  document.getElementById("tempo").innerText    = dados.tempo ?? "--:--";
 
   if (dados.percentual !== null && dados.percentual !== undefined) {
-    const perc = dados.percentual;
-    percentualEl.innerText = perc.toFixed(2) + " %";
+    document.getElementById("percentual").innerText =
+      dados.percentual.toFixed(2) + " %";
+    document.getElementById("media").innerText =
+      dados.mediaMinuto != null ? "Média minuto: " + dados.mediaMinuto.toFixed(2) + " %" : "Média minuto: --";
+    document.getElementById("mediaGeral").innerText =
+      dados.mediaGeral != null ? "Média geral: " + dados.mediaGeral.toFixed(2) + " %" : "Média geral: --";
 
-    if (dados.mediaMinuto !== null && dados.mediaMinuto !== undefined) {
-      mediaEl.innerText = "Média minuto: " + dados.mediaMinuto.toFixed(2) + " %";
-    } else {
-      mediaEl.innerText = "Média minuto: --";
-    }
-
-    if (dados.mediaGeral !== null && dados.mediaGeral !== undefined) {
-      mediaGeralEl.innerText = "Média geral: " + dados.mediaGeral.toFixed(2) + " %";
-    } else {
-      mediaGeralEl.innerText = "Média geral: --";
-    }
-
+    const t = document.getElementById("tendencia");
     if (dados.tendencia === "subindo") {
-      tendenciaEl.innerText = "Tendência: ↑ Subindo";
-      tendenciaEl.style.color = "#00ff88";
+      t.innerText = "Tendência: ↑ Subindo"; t.style.color = "#00ff88";
     } else if (dados.tendencia === "caindo") {
-      tendenciaEl.innerText = "Tendência: ↓ Caindo";
-      tendenciaEl.style.color = "#ff4444";
+      t.innerText = "Tendência: ↓ Caindo"; t.style.color = "#ff4444";
     } else {
-      tendenciaEl.innerText = "Tendência: → Estável";
-      tendenciaEl.style.color = "#fff";
+      t.innerText = "Tendência: → Estável"; t.style.color = "#fff";
     }
   } else {
-    percentualEl.innerText = "--";
-    mediaEl.innerText = "Média minuto: --";
-    mediaGeralEl.innerText = "Média geral: --";
-    tendenciaEl.innerText = "Tendência: --";
-    percentualEl.style.color = "#ffaa00";
+    document.getElementById("percentual").innerText = "--";
+    document.getElementById("percentual").style.color = "#ffaa00";
+    document.getElementById("media").innerText     = "Média minuto: --";
+    document.getElementById("mediaGeral").innerText = "Média geral: --";
+    document.getElementById("tendencia").innerText  = "Tendência: --";
   }
 });
 
-window.api?.onErro((msg)=>{
-  erroEl.innerText = msg;
+window.api?.onErro((msg) => { erroEl.innerText = msg; });
+
+// ── espelho ──────────────────────────────────────────────
+const mirrorSection     = document.getElementById("mirrorSection");
+const btnMirrorToggle   = document.getElementById("btnMirrorToggle");
+const mirrorCanvas      = document.getElementById("mirrorCanvas");
+const mirrorCtx         = mirrorCanvas.getContext("2d");
+const mirrorHint        = document.getElementById("mirrorHint");
+const sourceOverlay     = document.getElementById("sourceOverlay");
+const sourcesGrid       = document.getElementById("sourcesGrid");
+const regionOverlayWrap = document.getElementById("regionOverlayWrap");
+const regionOverlayTitle = document.getElementById("regionOverlayTitle");
+const regionVideo       = document.getElementById("regionVideo");
+const regionOverlay     = document.getElementById("regionOverlay");
+const regionHint        = document.getElementById("regionHint");
+
+let stream     = null;
+let cropRegion = null;
+let rafId      = null;
+let mirrorOpen = false;
+
+// toggle da seção
+btnMirrorToggle.addEventListener("click", () => {
+  mirrorOpen = !mirrorOpen;
+  mirrorSection.classList.toggle("open", mirrorOpen);
+  btnMirrorToggle.textContent = mirrorOpen ? "− Espelho" : "+ Espelho";
 });
+
+// clique no canvas → abre seletor de fonte
+mirrorCanvas.addEventListener("click", openSourcePicker);
+
+// ── seleção de fonte ─────────────────────────────────────
+async function openSourcePicker() {
+  sourcesGrid.innerHTML = "<div style='color:rgba(255,255,255,.4);font-size:11px;padding:4px;'>Carregando...</div>";
+  sourceOverlay.classList.add("open");
+
+  try {
+    const sources = await window.api.getSources();
+    sourcesGrid.innerHTML = "";
+    sources.forEach(src => {
+      const item = document.createElement("div");
+      item.className = "source-item";
+      item.innerHTML = `<img class="source-thumb" src="${src.thumbnail}"><div class="source-name">${src.name}</div>`;
+      item.addEventListener("click", () => {
+        sourceOverlay.classList.remove("open");
+        startCapture(src.id, src.name);
+      });
+      sourcesGrid.appendChild(item);
+    });
+  } catch (e) {
+    sourcesGrid.innerHTML = `<div style='color:#ff6b6b;font-size:11px;'>${e.message}</div>`;
+  }
+}
+
+document.getElementById("btnSourceClose").addEventListener("click", () => {
+  sourceOverlay.classList.remove("open");
+});
+
+// ── captura + seleção de região ──────────────────────────
+async function startCapture(sourceId, sourceName) {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId, minFrameRate: 30 } }
+  });
+
+  regionVideo.srcObject = stream;
+  await new Promise(r => { regionVideo.onloadedmetadata = r; });
+
+  regionOverlayTitle.textContent = `Região — ${sourceName}`;
+  regionHint.textContent = "Arraste para selecionar a região da odd";
+  regionHint.style.display = "block";
+  regionOverlayWrap.classList.add("open");
+  setupRegionSelector(sourceName);
+}
+
+document.getElementById("btnRegionClose").addEventListener("click", () => {
+  regionOverlayWrap.classList.remove("open");
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+});
+
+function setupRegionSelector(sourceName) {
+  const overlay = regionOverlay;
+  const ctx = overlay.getContext("2d");
+
+  function sync() {
+    overlay.width  = regionVideo.offsetWidth  || overlay.parentElement.offsetWidth;
+    overlay.height = regionVideo.offsetHeight || overlay.parentElement.offsetHeight;
+  }
+  sync();
+  const ro = new ResizeObserver(sync);
+  ro.observe(regionVideo);
+
+  let dragging = false, sx = 0, sy = 0, ex = 0, ey = 0;
+
+  function drawRect() {
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    const x = Math.min(sx,ex), y = Math.min(sy,ey);
+    const w = Math.abs(ex-sx), h = Math.abs(ey-sy);
+    if (w < 2 || h < 2) return;
+    ctx.strokeStyle = "#00ff88"; ctx.lineWidth = 2;
+    ctx.fillStyle = "rgba(0,255,136,.08)";
+    ctx.beginPath(); ctx.rect(x,y,w,h); ctx.fill(); ctx.stroke();
+  }
+
+  // limpa listeners antigos clonando o elemento
+  const fresh = overlay.cloneNode(true);
+  overlay.parentNode.replaceChild(fresh, overlay);
+  const ov = document.getElementById("regionOverlay");
+  const ovCtx = ov.getContext("2d");
+
+  ov.addEventListener("mousedown", e => {
+    dragging = true;
+    const r = ov.getBoundingClientRect();
+    sx = ex = e.clientX - r.left;
+    sy = ey = e.clientY - r.top;
+    regionHint.style.display = "none";
+  });
+  ov.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const r = ov.getBoundingClientRect();
+    ex = e.clientX - r.left; ey = e.clientY - r.top;
+    ovCtx.clearRect(0,0,ov.width,ov.height);
+    const x=Math.min(sx,ex),y=Math.min(sy,ey),w=Math.abs(ex-sx),h=Math.abs(ey-sy);
+    ovCtx.strokeStyle="#00ff88"; ovCtx.lineWidth=2;
+    ovCtx.fillStyle="rgba(0,255,136,.08)";
+    ovCtx.beginPath(); ovCtx.rect(x,y,w,h); ovCtx.fill(); ovCtx.stroke();
+  });
+  ov.addEventListener("mouseup", e => {
+    if (!dragging) return;
+    dragging = false;
+    const selW = Math.abs(ex-sx), selH = Math.abs(ey-sy);
+    if (selW < 10 || selH < 10) {
+      regionHint.textContent = "Muito pequeno, tente novamente";
+      regionHint.style.display = "block";
+      return;
+    }
+
+    // converte overlay → coordenadas reais do vídeo
+    const vw = regionVideo.videoWidth, vh = regionVideo.videoHeight;
+    const ow = ov.width, oh = ov.height;
+    const va = vw/vh, oa = ow/oh;
+    let rW, rH, offX, offY;
+    if (va > oa) { rW=ow; rH=ow/va; offX=0; offY=(oh-rH)/2; }
+    else          { rH=oh; rW=oh*va; offX=(ow-rW)/2; offY=0; }
+
+    cropRegion = {
+      x: (Math.min(sx,ex) - offX) * (vw/rW),
+      y: (Math.min(sy,ey) - offY) * (vh/rH),
+      w: selW * (vw/rW),
+      h: selH * (vh/rH)
+    };
+
+    ro.disconnect();
+    regionOverlayWrap.classList.remove("open");
+    mirrorHint.style.display = "none";
+
+    // garante que a seção está aberta
+    if (!mirrorOpen) {
+      mirrorOpen = true;
+      mirrorSection.classList.add("open");
+      btnMirrorToggle.textContent = "− Espelho";
+    }
+
+    startMirror();
+  });
+}
+
+// ── renderização do espelho ──────────────────────────────
+function startMirror() {
+  if (rafId) cancelAnimationFrame(rafId);
+
+  function renderFrame() {
+    const cw = mirrorCanvas.offsetWidth;
+    const ch = mirrorCanvas.offsetHeight;
+    if (mirrorCanvas.width !== cw)  mirrorCanvas.width  = cw;
+    if (mirrorCanvas.height !== ch) mirrorCanvas.height = ch;
+
+    if (cropRegion && regionVideo.readyState >= 2) {
+      mirrorCtx.drawImage(
+        regionVideo,
+        cropRegion.x, cropRegion.y, cropRegion.w, cropRegion.h,
+        0, 0, cw, ch
+      );
+    }
+    rafId = requestAnimationFrame(renderFrame);
+  }
+  renderFrame();
+}
 </script>
 
 </body>
