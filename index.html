@@ -51,6 +51,35 @@ h3{
   color:red;
   margin-top:10px;
 }
+.acrescimos-box{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  margin-top:18px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:10px;
+  padding:7px 14px;
+}
+.acrescimos-box label{
+  font-size:13px;
+  color:#bbb;
+  white-space:nowrap;
+}
+.acrescimos-box input{
+  width:52px;
+  background:rgba(0,0,0,.3);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:6px;
+  color:#fff;
+  font-size:14px;
+  text-align:center;
+  padding:3px 6px;
+  outline:none;
+}
+.acrescimos-box input:focus{
+  border-color:rgba(0,255,136,.5);
+}
 </style>
 </head>
 <body>
@@ -64,6 +93,13 @@ h3{
 <div id="media">Média minuto: --</div>
 <div id="mediaGeral">Média geral: --</div>
 <div id="tendencia">Tendência: --</div>
+
+<div class="acrescimos-box">
+  <label for="acrescimosInput">Acréscimos</label>
+  <input id="acrescimosInput" type="number" min="0" max="20" value="5" />
+  <label style="font-size:13px;color:#bbb;">min</label>
+</div>
+
 <div id="erro"></div>
 
 <script>
@@ -79,6 +115,14 @@ function fmtOdd(value) {
 if (!window.api) {
   erroEl.innerText = "ERRO: window.api não existe (preload não carregou). Verifique o preload.js no main.";
 }
+
+const acrescimosInput = document.getElementById("acrescimosInput");
+acrescimosInput.addEventListener("change", () => {
+  const val = parseInt(acrescimosInput.value, 10);
+  if (Number.isFinite(val) && val >= 0) {
+    window.api?.atualizarAcrescimos(val);
+  }
+});
 
 window.api?.onAtualizarDados((dados)=>{
   const oddEl = document.getElementById("odd");

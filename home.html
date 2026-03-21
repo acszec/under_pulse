@@ -732,10 +732,6 @@
       </div>
       <p class="modalHint" style="margin-top:0;">Cole a URL usada para capturar o relógio da partida.</p>
       <input id="tempoModalInput" class="modalInput" type="text" placeholder="https://..." />
-      <div style="margin-top:10px;">
-        <p class="modalHint" style="margin:0 0 6px;">Minutos de acréscimos</p>
-        <input id="tempoModalAcrescimos" class="modalInput" type="number" min="0" max="20" value="5" style="width:100px;" />
-      </div>
       <div class="modalActions">
         <button id="tempoModalCancel" class="modalCancel" type="button">Cancelar</button>
         <button id="tempoModalConfirm" class="modalConfirm" type="button">Confirmar</button>
@@ -753,7 +749,6 @@
     const searchInput = document.getElementById("searchInput");
     const tempoModal = document.getElementById("tempoModal");
     const tempoModalInput = document.getElementById("tempoModalInput");
-    const tempoModalAcrescimos = document.getElementById("tempoModalAcrescimos");
     const tempoModalHalfBadge = document.getElementById("tempoModalHalfBadge");
     const tempoModalConfirm = document.getElementById("tempoModalConfirm");
     const tempoModalCancel = document.getElementById("tempoModalCancel");
@@ -811,11 +806,7 @@
           resolve(value);
         };
 
-        const onConfirm = () => {
-          const urlTempo = String(tempoModalInput.value || "").trim();
-          const acrescimos = parseInt(tempoModalAcrescimos.value, 10) || 5;
-          close({ urlTempo, acrescimos });
-        };
+        const onConfirm = () => close(String(tempoModalInput.value || "").trim());
         const onCancel = () => close(null);
         const onBackdropClick = (e) => {
           if (e.target === tempoModal) close(null);
@@ -832,7 +823,6 @@
         tempoModalHalfBadge.style.fontSize = "12px";
 
         tempoModalInput.value = "";
-        tempoModalAcrescimos.value = "5";
         tempoModal.classList.add("open");
         tempoModal.setAttribute("aria-hidden", "false");
         tempoModalConfirm.addEventListener("click", onConfirm);
@@ -1011,9 +1001,8 @@
             return;
           }
 
-          const modalResult = await askTempoUrl(inPlayMatchStatus);
-          if (modalResult === null) return;
-          const { urlTempo, acrescimos } = modalResult;
+          const urlTempo = await askTempoUrl(inPlayMatchStatus);
+          if (urlTempo === null) return;
           if (!urlTempo) {
             msgEl.innerText = "A URL do tempo é obrigatória.";
             msgEl.style.display = "block";
@@ -1031,7 +1020,6 @@
             eventId,
             marketId,
             urlTempo,
-            acrescimos,
             inPlayMatchStatus
           });
 
