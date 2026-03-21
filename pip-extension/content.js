@@ -2,149 +2,124 @@
   if (window.__underPulsePipLoaded) return;
   window.__underPulsePipLoaded = true;
 
-  let pipVideo    = null;
-  let pipCanvas   = null;
-  let pipCtx      = null;
-  let selectedEl  = null;
-  let observer    = null;
-  let updateTimer = null;
-  let isSelecting = false;
+  let highlighted  = null;
+  let selectedEl   = null;
+  let pipVideo     = null;
+  let pipCanvas    = null;
+  let pipCtx       = null;
+  let updateTimer  = null;
+  let observer     = null;
+  let isSelecting  = false;
 
-  // ── Modo de seleção de elemento ────────────────────────
+  // ── Modo seleção ───────────────────────────────────────
   function enterSelectMode() {
     if (isSelecting) return;
     isSelecting = true;
+    document.body.style.cursor = "crosshair";
 
-    // aviso visual no topo da página
     const banner = document.createElement("div");
-    banner.id = "__pip_banner__";
     banner.style.cssText = `
-      position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-      background: rgba(255,170,0,.92); color: #111; font-family: Arial, sans-serif;
-      font-size: 13px; font-weight: bold; text-align: center;
-      padding: 8px; pointer-events: none; letter-spacing: .3px;
+      position:fixed;top:0;left:0;right:0;z-index:2147483647;
+      background:rgba(255,170,0,.95);color:#111;font-family:Arial,sans-serif;
+      font-size:13px;font-weight:bold;text-align:center;padding:9px;
+      pointer-events:none;letter-spacing:.3px;
     `;
-    banner.textContent = "Under Pulse PiP — Clique no elemento que deseja monitorar  •  ESC para cancelar";
+    banner.textContent = "Under Pulse PiP — Clique no elemento desejado  •  ESC para cancelar";
     document.body.appendChild(banner);
 
-    // overlay transparente para interceptar cliques
-    const overlay = document.createElement("div");
-    overlay.id = "__pip_overlay__";
-    overlay.style.cssText = `
-      position: fixed; inset: 0; z-index: 2147483646;
-      cursor: crosshair; background: transparent;
-    `;
-    document.body.appendChild(overlay);
-
-    let highlighted = null;
-
-    function highlight(el) {
-      if (highlighted && highlighted !== el) {
-        highlighted.style.outline    = highlighted.__pipOldOutline    ?? "";
-        highlighted.style.background = highlighted.__pipOldBackground ?? "";
-        delete highlighted.__pipOldOutline;
-        delete highlighted.__pipOldBackground;
+    // ── highlight: mouseover/mouseout direto no document ──
+    function onOver(e) {
+      if (highlighted && highlighted !== e.target) {
+        highlighted.style.outline = highlighted._pipOld ?? "";
+        delete highlighted._pipOld;
       }
-      if (el && el !== overlay && el !== banner) {
-        highlighted = el;
-        highlighted.__pipOldOutline    = highlighted.style.outline;
-        highlighted.__pipOldBackground = highlighted.style.background;
-        highlighted.style.outline      = "2px solid rgba(255,170,0,.95)";
-        highlighted.style.background   = "rgba(255,170,0,.12)";
-      }
+      highlighted = e.target;
+      highlighted._pipOld = highlighted.style.outline;
+      highlighted.style.outline = "3px solid #ffaa00";
     }
 
-    function clearHighlight() {
+    function onOut(e) {
+      if (e.target !== highlighted) return;
+      e.target.style.outline = e.target._pipOld ?? "";
+      delete e.target._pipOld;
+      highlighted = null;
+    }
+
+    // ── clique captura o elemento ──
+    function onClick(e) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      // limpa estado de seleção
+      cleanup(false);
+
+      // salva elemento e inicia PiP ainda dentro do gesto do usuário
+      selectedEl = e.target;
+      startPip();
+    }
+
+    function onKey(e) {
+      if (e.key === "Escape") cleanup(true);
+    }
+
+    function cleanup(full) {
+      isSelecting = false;
+      document.body.style.cursor = "";
       if (highlighted) {
-        highlighted.style.outline    = highlighted.__pipOldOutline    ?? "";
-        highlighted.style.background = highlighted.__pipOldBackground ?? "";
-        delete highlighted.__pipOldOutline;
-        delete highlighted.__pipOldBackground;
+        highlighted.style.outline = highlighted._pipOld ?? "";
+        delete highlighted._pipOld;
         highlighted = null;
       }
+      banner.remove();
+      document.removeEventListener("mouseover", onOver, true);
+      document.removeEventListener("mouseout",  onOut,  true);
+      document.removeEventListener("click",     onClick, true);
+      document.removeEventListener("keydown",   onKey,   true);
     }
 
-    overlay.addEventListener("mousemove", e => {
-      overlay.style.pointerEvents = "none";
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      overlay.style.pointerEvents = "auto";
-      highlight(el);
-    });
-
-    overlay.addEventListener("click", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      overlay.style.pointerEvents = "none";
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      overlay.style.pointerEvents = "auto";
-
-      clearHighlight();
-      overlay.remove();
-      banner.remove();
-      isSelecting = false;
-
-      if (el) await startPip(el);
-    });
-
-    function onEsc(e) {
-      if (e.key !== "Escape") return;
-      clearHighlight();
-      overlay.remove();
-      banner.remove();
-      isSelecting = false;
-      document.removeEventListener("keydown", onEsc);
-    }
-    document.addEventListener("keydown", onEsc);
+    document.addEventListener("mouseover", onOver,  true);
+    document.addEventListener("mouseout",  onOut,   true);
+    document.addEventListener("click",     onClick, true);
+    document.addEventListener("keydown",   onKey,   true);
   }
 
-  // ── Inicia o Picture-in-Picture ────────────────────────
-  async function startPip(el) {
-    selectedEl = el;
-
-    // encerra PiP anterior
+  // ── Inicia PiP ─────────────────────────────────────────
+  function startPip() {
     stopPip();
 
-    // canvas com as dimensões do PiP
     pipCanvas        = document.createElement("canvas");
     pipCanvas.width  = 320;
     pipCanvas.height = 100;
     pipCtx           = pipCanvas.getContext("2d");
+    renderCanvas();
 
-    // vídeo oculto alimentado pelo canvas
     pipVideo              = document.createElement("video");
     pipVideo.srcObject    = pipCanvas.captureStream(15);
     pipVideo.muted        = true;
-    pipVideo.style.cssText = "position:fixed;width:1px;height:1px;opacity:0.01;pointer-events:none;top:0;left:0;";
+    pipVideo.style.cssText = `
+      position:fixed;top:-2px;left:-2px;
+      width:1px;height:1px;opacity:0.01;pointer-events:none;
+    `;
     document.body.appendChild(pipVideo);
 
-    renderCanvas();
+    // play → requestPictureInPicture em cadeia .then para manter o gesto do usuário
+    pipVideo.play()
+      .then(() => pipVideo.requestPictureInPicture())
+      .catch(err => console.warn("[Under Pulse PiP]", err.message));
 
-    try {
-      await pipVideo.play();
-      await pipVideo.requestPictureInPicture();
-    } catch (err) {
-      console.warn("[Under Pulse PiP] Erro ao iniciar PiP:", err.message);
-      pipVideo.remove();
-      pipVideo = null;
-      return;
-    }
+    updateTimer = setInterval(renderCanvas, 300);
 
-    // atualiza canvas a cada 250ms
-    updateTimer = setInterval(() => renderCanvas(), 250);
-
-    // MutationObserver como reforço
-    observer = new MutationObserver(() => renderCanvas());
-    observer.observe(el, { childList: true, subtree: true, characterData: true });
+    observer = new MutationObserver(renderCanvas);
+    observer.observe(selectedEl, { childList: true, subtree: true, characterData: true });
 
     pipVideo.addEventListener("leavepictureinpicture", stopPip);
   }
 
-  // ── Para e limpa o PiP ─────────────────────────────────
+  // ── Para PiP ───────────────────────────────────────────
   function stopPip() {
-    if (updateTimer)  { clearInterval(updateTimer); updateTimer = null; }
-    if (observer)     { observer.disconnect(); observer = null; }
-    if (pipVideo)     { pipVideo.remove(); pipVideo = null; }
+    if (updateTimer) { clearInterval(updateTimer); updateTimer = null; }
+    if (observer)    { observer.disconnect(); observer = null; }
+    if (pipVideo)    { pipVideo.remove(); pipVideo = null; }
     if (document.pictureInPictureElement) {
       document.exitPictureInPicture().catch(() => {});
     }
@@ -153,42 +128,35 @@
     selectedEl = null;
   }
 
-  // ── Renderiza o texto no canvas ────────────────────────
+  // ── Renderiza canvas ────────────────────────────────────
   function renderCanvas() {
     if (!pipCtx || !selectedEl) return;
+    const text = (selectedEl.textContent || "").trim().replace(/\s+/g, " ");
+    const w = 320, h = 100;
 
-    const text = (selectedEl.textContent ?? "").trim().replace(/\s+/g, " ");
-    const w = pipCanvas.width;
-    const h = pipCanvas.height;
-
-    // fundo escuro
     pipCtx.fillStyle = "#0f0f0f";
     pipCtx.fillRect(0, 0, w, h);
 
-    // borda mostarda
-    pipCtx.strokeStyle = "rgba(255,170,0,.45)";
-    pipCtx.lineWidth = 2;
+    pipCtx.strokeStyle = "rgba(255,170,0,.4)";
+    pipCtx.lineWidth   = 2;
     pipCtx.strokeRect(1, 1, w - 2, h - 2);
 
-    // texto em mostarda — ajusta tamanho para caber
+    pipCtx.fillStyle    = "#ffaa00";
     pipCtx.textAlign    = "center";
     pipCtx.textBaseline = "middle";
-    pipCtx.fillStyle    = "#ffaa00";
 
-    let size = 62;
+    let size = 64;
     pipCtx.font = `bold ${size}px Arial`;
     while (pipCtx.measureText(text).width > w - 24 && size > 10) {
       size -= 2;
       pipCtx.font = `bold ${size}px Arial`;
     }
-
     pipCtx.fillText(text, w / 2, h / 2);
   }
 
-  // ── Mensagens vindas do popup ──────────────────────────
+  // ── Mensagens do popup ──────────────────────────────────
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === "startSelect") enterSelectMode();
     if (msg.action === "stopPip")     stopPip();
   });
-
 })();
