@@ -16,15 +16,39 @@ body{
   flex-direction:column;
   min-height:100vh;
 }
-h3{ margin:0; }
-.subtitle{
-  margin-top:8px;
-  color:#bbb;
-  font-size:13px;
+h3{ margin:0; font-size:16px; }
+
+/* ── espelho ── */
+#mirrorWrap{
+  margin-top:12px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
 }
+#mirrorCanvas{
+  width:100%;
+  height:62px;
+  display:block;
+  border-radius:8px;
+  border:2px solid rgba(255,170,0,.55);
+  background:rgba(255,170,0,.06);
+  cursor:pointer;
+  object-fit:cover;
+}
+#mirrorCanvas:hover{
+  border-color:rgba(255,170,0,.85);
+}
+#mirrorLabel{
+  font-size:10px;
+  color:rgba(255,170,0,.6);
+  letter-spacing:.4px;
+}
+
+/* ── dados ── */
 #tempo{
   font-size:30px;
-  margin-top:20px;
+  margin-top:18px;
 }
 #odd{
   font-size:70px;
@@ -85,75 +109,16 @@ h3{ margin:0; }
   border-color:rgba(0,255,136,.5);
 }
 
-/* ── espelho ── */
-.mirror-toggle{
-  margin-top:16px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  cursor:pointer;
-  color:rgba(255,255,255,.45);
-  font-size:12px;
-  user-select:none;
-}
-.mirror-toggle:hover{ color:rgba(255,255,255,.7); }
-.mirror-toggle-line{
-  flex:1;
-  height:1px;
-  background:rgba(255,255,255,.10);
-}
-.mirror-toggle-btn{
-  background:rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.12);
-  border-radius:6px;
-  color:rgba(255,255,255,.55);
-  font-size:11px;
-  padding:3px 10px;
-  cursor:pointer;
-  white-space:nowrap;
-}
-.mirror-toggle-btn:hover{
-  background:rgba(0,255,136,.10);
-  border-color:rgba(0,255,136,.30);
-  color:#d6ffe8;
-}
-
-#mirrorSection{
-  margin-top:10px;
-  flex:1;
-  display:none;
-  flex-direction:column;
-  min-height:180px;
-}
-#mirrorSection.open{ display:flex; }
-
-/* canvas do espelho */
-#mirrorCanvas{
-  flex:1;
-  width:100%;
-  display:block;
-  border-radius:8px;
-  background:#000;
-  cursor:pointer;
-}
-.mirror-hint{
-  font-size:11px;
-  color:rgba(255,255,255,.4);
-  margin-top:6px;
-}
-
-/* ── overlay de seleção (fonte + região) ── */
+/* ── overlays ── */
 .overlay{
   position:fixed;
   inset:0;
   z-index:100;
-  background:rgba(0,0,0,.88);
+  background:rgba(0,0,0,.92);
   display:none;
   flex-direction:column;
 }
 .overlay.open{ display:flex; }
-
 .overlay-bar{
   display:flex;
   align-items:center;
@@ -162,10 +127,7 @@ h3{ margin:0; }
   border-bottom:1px solid rgba(255,255,255,.10);
   flex-shrink:0;
 }
-.overlay-title{
-  font-size:13px;
-  font-weight:700;
-}
+.overlay-title{ font-size:13px; font-weight:700; }
 .overlay-close{
   background:rgba(255,255,255,.08);
   border:1px solid rgba(255,255,255,.14);
@@ -177,7 +139,6 @@ h3{ margin:0; }
 }
 .overlay-close:hover{ background:rgba(255,80,80,.2); }
 
-/* grade de fontes */
 #sourcesGrid{
   display:grid;
   grid-template-columns:repeat(auto-fill, minmax(120px,1fr));
@@ -194,7 +155,7 @@ h3{ margin:0; }
   background:rgba(255,255,255,.03);
   transition:border-color .15s;
 }
-.source-item:hover{ border-color:rgba(0,255,136,.5); }
+.source-item:hover{ border-color:rgba(255,170,0,.6); }
 .source-thumb{
   width:100%;
   aspect-ratio:16/9;
@@ -211,7 +172,6 @@ h3{ margin:0; }
   text-overflow:ellipsis;
 }
 
-/* seleção de região */
 #regionContainer{
   flex:1;
   position:relative;
@@ -246,7 +206,12 @@ h3{ margin:0; }
 <body>
 
 <h3>Painel Under</h3>
-<div class="subtitle">A captura é iniciada pela tela Home ao selecionar um jogo.</div>
+
+<!-- espelho logo abaixo do título -->
+<div id="mirrorWrap">
+  <canvas id="mirrorCanvas" title="Clique para selecionar a fonte"></canvas>
+  <span id="mirrorLabel">ESPELHO — clique para configurar</span>
+</div>
 
 <div id="tempo">--:--</div>
 <div id="odd">--</div>
@@ -263,20 +228,7 @@ h3{ margin:0; }
 
 <div id="erro"></div>
 
-<!-- toggle espelho -->
-<div class="mirror-toggle" id="mirrorToggle">
-  <div class="mirror-toggle-line"></div>
-  <button class="mirror-toggle-btn" type="button" id="btnMirrorToggle">+ Espelho</button>
-  <div class="mirror-toggle-line"></div>
-</div>
-
-<!-- seção do espelho -->
-<div id="mirrorSection">
-  <canvas id="mirrorCanvas" title="Clique para selecionar fonte"></canvas>
-  <div class="mirror-hint" id="mirrorHint">Clique para selecionar a fonte</div>
-</div>
-
-<!-- overlay: seleção de fonte -->
+<!-- overlay: fonte -->
 <div id="sourceOverlay" class="overlay">
   <div class="overlay-bar">
     <span class="overlay-title">Selecione a janela ou tela</span>
@@ -285,7 +237,7 @@ h3{ margin:0; }
   <div id="sourcesGrid"></div>
 </div>
 
-<!-- overlay: seleção de região -->
+<!-- overlay: região -->
 <div id="regionOverlayWrap" class="overlay">
   <div class="overlay-bar">
     <span class="overlay-title" id="regionOverlayTitle">Selecione a região</span>
@@ -302,81 +254,61 @@ h3{ margin:0; }
 // ── dados ────────────────────────────────────────────────
 const erroEl = document.getElementById("erro");
 
-function fmtOdd(value) {
-  if (value === null || value === undefined) return "--";
-  const odd = Number(value);
-  if (!Number.isFinite(odd)) return "--";
-  return odd.toFixed(2);
+function fmtOdd(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(2) : "--";
 }
 
 if (!window.api) {
   erroEl.innerText = "ERRO: window.api não existe. Verifique o preload.js.";
 }
 
-const acrescimosInput = document.getElementById("acrescimosInput");
-acrescimosInput.addEventListener("change", () => {
-  const val = parseInt(acrescimosInput.value, 10);
+document.getElementById("acrescimosInput").addEventListener("change", (e) => {
+  const val = parseInt(e.target.value, 10);
   if (Number.isFinite(val) && val >= 0) window.api?.atualizarAcrescimos(val);
 });
 
-window.api?.onAtualizarDados((dados) => {
-  document.getElementById("odd").innerText      = fmtOdd(dados.odd);
-  document.getElementById("tempo").innerText    = dados.tempo ?? "--:--";
+window.api?.onAtualizarDados((d) => {
+  document.getElementById("odd").innerText   = fmtOdd(d.odd);
+  document.getElementById("tempo").innerText = d.tempo ?? "--:--";
 
-  if (dados.percentual !== null && dados.percentual !== undefined) {
+  if (d.percentual != null) {
     document.getElementById("percentual").innerText =
-      dados.percentual.toFixed(2) + " %";
+      d.percentual.toFixed(2) + " %";
     document.getElementById("media").innerText =
-      dados.mediaMinuto != null ? "Média minuto: " + dados.mediaMinuto.toFixed(2) + " %" : "Média minuto: --";
+      d.mediaMinuto != null ? "Média minuto: " + d.mediaMinuto.toFixed(2) + " %" : "Média minuto: --";
     document.getElementById("mediaGeral").innerText =
-      dados.mediaGeral != null ? "Média geral: " + dados.mediaGeral.toFixed(2) + " %" : "Média geral: --";
+      d.mediaGeral != null ? "Média geral: " + d.mediaGeral.toFixed(2) + " %" : "Média geral: --";
 
     const t = document.getElementById("tendencia");
-    if (dados.tendencia === "subindo") {
-      t.innerText = "Tendência: ↑ Subindo"; t.style.color = "#00ff88";
-    } else if (dados.tendencia === "caindo") {
-      t.innerText = "Tendência: ↓ Caindo"; t.style.color = "#ff4444";
-    } else {
-      t.innerText = "Tendência: → Estável"; t.style.color = "#fff";
-    }
+    if (d.tendencia === "subindo")      { t.innerText = "Tendência: ↑ Subindo"; t.style.color = "#00ff88"; }
+    else if (d.tendencia === "caindo")  { t.innerText = "Tendência: ↓ Caindo";  t.style.color = "#ff4444"; }
+    else                                { t.innerText = "Tendência: → Estável";  t.style.color = "#fff"; }
   } else {
-    document.getElementById("percentual").innerText = "--";
+    document.getElementById("percentual").innerText  = "--";
     document.getElementById("percentual").style.color = "#ffaa00";
-    document.getElementById("media").innerText     = "Média minuto: --";
-    document.getElementById("mediaGeral").innerText = "Média geral: --";
-    document.getElementById("tendencia").innerText  = "Tendência: --";
+    document.getElementById("media").innerText       = "Média minuto: --";
+    document.getElementById("mediaGeral").innerText  = "Média geral: --";
+    document.getElementById("tendencia").innerText   = "Tendência: --";
   }
 });
 
 window.api?.onErro((msg) => { erroEl.innerText = msg; });
 
 // ── espelho ──────────────────────────────────────────────
-const mirrorSection     = document.getElementById("mirrorSection");
-const btnMirrorToggle   = document.getElementById("btnMirrorToggle");
 const mirrorCanvas      = document.getElementById("mirrorCanvas");
 const mirrorCtx         = mirrorCanvas.getContext("2d");
-const mirrorHint        = document.getElementById("mirrorHint");
+const mirrorLabel       = document.getElementById("mirrorLabel");
 const sourceOverlay     = document.getElementById("sourceOverlay");
 const sourcesGrid       = document.getElementById("sourcesGrid");
 const regionOverlayWrap = document.getElementById("regionOverlayWrap");
-const regionOverlayTitle = document.getElementById("regionOverlayTitle");
 const regionVideo       = document.getElementById("regionVideo");
-const regionOverlay     = document.getElementById("regionOverlay");
 const regionHint        = document.getElementById("regionHint");
 
 let stream     = null;
 let cropRegion = null;
 let rafId      = null;
-let mirrorOpen = false;
 
-// toggle da seção
-btnMirrorToggle.addEventListener("click", () => {
-  mirrorOpen = !mirrorOpen;
-  mirrorSection.classList.toggle("open", mirrorOpen);
-  btnMirrorToggle.textContent = mirrorOpen ? "− Espelho" : "+ Espelho";
-});
-
-// clique no canvas → abre seletor de fonte
 mirrorCanvas.addEventListener("click", openSourcePicker);
 
 // ── seleção de fonte ─────────────────────────────────────
@@ -397,7 +329,7 @@ async function openSourcePicker() {
       });
       sourcesGrid.appendChild(item);
     });
-  } catch (e) {
+  } catch(e) {
     sourcesGrid.innerHTML = `<div style='color:#ff6b6b;font-size:11px;'>${e.message}</div>`;
   }
 }
@@ -418,11 +350,11 @@ async function startCapture(sourceId, sourceName) {
   regionVideo.srcObject = stream;
   await new Promise(r => { regionVideo.onloadedmetadata = r; });
 
-  regionOverlayTitle.textContent = `Região — ${sourceName}`;
+  document.getElementById("regionOverlayTitle").textContent = `Região — ${sourceName}`;
   regionHint.textContent = "Arraste para selecionar a região da odd";
   regionHint.style.display = "block";
   regionOverlayWrap.classList.add("open");
-  setupRegionSelector(sourceName);
+  setupRegionSelector();
 }
 
 document.getElementById("btnRegionClose").addEventListener("click", () => {
@@ -430,54 +362,46 @@ document.getElementById("btnRegionClose").addEventListener("click", () => {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
 });
 
-function setupRegionSelector(sourceName) {
-  const overlay = regionOverlay;
-  const ctx = overlay.getContext("2d");
+function setupRegionSelector() {
+  const ov  = document.getElementById("regionOverlay");
+  const ctx = ov.getContext("2d");
 
   function sync() {
-    overlay.width  = regionVideo.offsetWidth  || overlay.parentElement.offsetWidth;
-    overlay.height = regionVideo.offsetHeight || overlay.parentElement.offsetHeight;
+    ov.width  = regionVideo.offsetWidth  || ov.parentElement.offsetWidth;
+    ov.height = regionVideo.offsetHeight || ov.parentElement.offsetHeight;
   }
   sync();
   const ro = new ResizeObserver(sync);
   ro.observe(regionVideo);
 
+  // clona para limpar listeners anteriores
+  const fresh = ov.cloneNode(true);
+  ov.parentNode.replaceChild(fresh, ov);
+  const canvas = document.getElementById("regionOverlay");
+  const c = canvas.getContext("2d");
+
   let dragging = false, sx = 0, sy = 0, ex = 0, ey = 0;
 
-  function drawRect() {
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
-    const x = Math.min(sx,ex), y = Math.min(sy,ey);
-    const w = Math.abs(ex-sx), h = Math.abs(ey-sy);
-    if (w < 2 || h < 2) return;
-    ctx.strokeStyle = "#00ff88"; ctx.lineWidth = 2;
-    ctx.fillStyle = "rgba(0,255,136,.08)";
-    ctx.beginPath(); ctx.rect(x,y,w,h); ctx.fill(); ctx.stroke();
-  }
-
-  // limpa listeners antigos clonando o elemento
-  const fresh = overlay.cloneNode(true);
-  overlay.parentNode.replaceChild(fresh, overlay);
-  const ov = document.getElementById("regionOverlay");
-  const ovCtx = ov.getContext("2d");
-
-  ov.addEventListener("mousedown", e => {
+  canvas.addEventListener("mousedown", e => {
     dragging = true;
-    const r = ov.getBoundingClientRect();
+    const r = canvas.getBoundingClientRect();
     sx = ex = e.clientX - r.left;
     sy = ey = e.clientY - r.top;
     regionHint.style.display = "none";
   });
-  ov.addEventListener("mousemove", e => {
+
+  canvas.addEventListener("mousemove", e => {
     if (!dragging) return;
-    const r = ov.getBoundingClientRect();
+    const r = canvas.getBoundingClientRect();
     ex = e.clientX - r.left; ey = e.clientY - r.top;
-    ovCtx.clearRect(0,0,ov.width,ov.height);
-    const x=Math.min(sx,ex),y=Math.min(sy,ey),w=Math.abs(ex-sx),h=Math.abs(ey-sy);
-    ovCtx.strokeStyle="#00ff88"; ovCtx.lineWidth=2;
-    ovCtx.fillStyle="rgba(0,255,136,.08)";
-    ovCtx.beginPath(); ovCtx.rect(x,y,w,h); ovCtx.fill(); ovCtx.stroke();
+    c.clearRect(0, 0, canvas.width, canvas.height);
+    const x=Math.min(sx,ex), y=Math.min(sy,ey), w=Math.abs(ex-sx), h=Math.abs(ey-sy);
+    c.strokeStyle = "rgba(255,170,0,.9)"; c.lineWidth = 2;
+    c.fillStyle   = "rgba(255,170,0,.08)";
+    c.beginPath(); c.rect(x,y,w,h); c.fill(); c.stroke();
   });
-  ov.addEventListener("mouseup", e => {
+
+  canvas.addEventListener("mouseup", () => {
     if (!dragging) return;
     dragging = false;
     const selW = Math.abs(ex-sx), selH = Math.abs(ey-sy);
@@ -487,9 +411,8 @@ function setupRegionSelector(sourceName) {
       return;
     }
 
-    // converte overlay → coordenadas reais do vídeo
     const vw = regionVideo.videoWidth, vh = regionVideo.videoHeight;
-    const ow = ov.width, oh = ov.height;
+    const ow = canvas.width, oh = canvas.height;
     const va = vw/vh, oa = ow/oh;
     let rW, rH, offX, offY;
     if (va > oa) { rW=ow; rH=ow/va; offX=0; offY=(oh-rH)/2; }
@@ -504,39 +427,26 @@ function setupRegionSelector(sourceName) {
 
     ro.disconnect();
     regionOverlayWrap.classList.remove("open");
-    mirrorHint.style.display = "none";
-
-    // garante que a seção está aberta
-    if (!mirrorOpen) {
-      mirrorOpen = true;
-      mirrorSection.classList.add("open");
-      btnMirrorToggle.textContent = "− Espelho";
-    }
-
+    mirrorLabel.textContent = "ESPELHO — clique para reconfigurar";
     startMirror();
   });
 }
 
-// ── renderização do espelho ──────────────────────────────
+// ── renderização ─────────────────────────────────────────
 function startMirror() {
   if (rafId) cancelAnimationFrame(rafId);
 
-  function renderFrame() {
+  function frame() {
     const cw = mirrorCanvas.offsetWidth;
     const ch = mirrorCanvas.offsetHeight;
     if (mirrorCanvas.width !== cw)  mirrorCanvas.width  = cw;
     if (mirrorCanvas.height !== ch) mirrorCanvas.height = ch;
-
     if (cropRegion && regionVideo.readyState >= 2) {
-      mirrorCtx.drawImage(
-        regionVideo,
-        cropRegion.x, cropRegion.y, cropRegion.w, cropRegion.h,
-        0, 0, cw, ch
-      );
+      mirrorCtx.drawImage(regionVideo, cropRegion.x, cropRegion.y, cropRegion.w, cropRegion.h, 0, 0, cw, ch);
     }
-    rafId = requestAnimationFrame(renderFrame);
+    rafId = requestAnimationFrame(frame);
   }
-  renderFrame();
+  frame();
 }
 </script>
 
