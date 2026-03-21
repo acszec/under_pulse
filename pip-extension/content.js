@@ -2,13 +2,12 @@
   if (window.__underPulsePipLoaded) return;
   window.__underPulsePipLoaded = true;
 
-  let highlighted  = null;
-  let selectedEl   = null;
-  let pipWin       = null;
-  let pipEl        = null;
-  let updateTimer  = null;
-  let observer     = null;
-  let isSelecting  = false;
+  let highlighted = null;
+  let selectedEl  = null;
+  let pipWin      = null;
+  let pipImg      = null;
+  let updateTimer = null;
+  let isSelecting = false;
 
   // ── Modo seleção ───────────────────────────────────────
   function enterSelectMode() {
@@ -86,6 +85,36 @@
     document.addEventListener("keydown",   onKey,   true);
   }
 
+  // ── Captura screenshot do elemento via background ──────
+  function captureElement(el) {
+    return new Promise((resolve) => {
+      const rect = el.getBoundingClientRect();
+      const dpr  = window.devicePixelRatio || 1;
+
+      chrome.runtime.sendMessage({ action: "captureTab" }, (res) => {
+        if (!res?.dataUrl) return resolve(null);
+
+        const img = new Image();
+        img.onload = () => {
+          const c   = document.createElement("canvas");
+          c.width   = Math.round(rect.width  * dpr);
+          c.height  = Math.round(rect.height * dpr);
+          const ctx = c.getContext("2d");
+          ctx.drawImage(
+            img,
+            Math.round(rect.left * dpr),
+            Math.round(rect.top  * dpr),
+            c.width, c.height,
+            0, 0, c.width, c.height
+          );
+          resolve(c.toDataURL());
+        };
+        img.onerror = () => resolve(null);
+        img.src = res.dataUrl;
+      });
+    });
+  }
+
   // ── Inicia Document PiP ────────────────────────────────
   async function startPip() {
     stopPip();
@@ -95,17 +124,20 @@
       return;
     }
 
+    const rect = selectedEl.getBoundingClientRect();
+    const pipW = Math.max(Math.round(rect.width)  || 220, 120);
+    const pipH = Math.max(Math.round(rect.height) || 80,  40);
+
     try {
       pipWin = await window.documentPictureInPicture.requestWindow({
-        width:  200,
-        height: 60
+        width:  pipW,
+        height: pipH
       });
     } catch (err) {
       console.error("[Under Pulse PiP]", err.message);
       return;
     }
 
-    // estilos da janela PiP
     const style = pipWin.document.createElement("style");
     style.textContent = `
       * { margin:0; padding:0; box-sizing:border-box; }
@@ -115,77 +147,35 @@
         display:flex; align-items:center; justify-content:center;
         overflow:hidden;
       }
-      #val {
-        color:#ffaa00;
-        font-family:Arial,sans-serif;
-        font-weight:bold;
-        font-size:10vw;
-        white-space:nowrap;
-        padding:0 6px;
-        border:1px solid rgba(255,170,0,.35);
-        border-radius:4px;
-        max-width:100%;
-        overflow:hidden;
-        text-overflow:ellipsis;
-      }
-      #dbg {
-        color:rgba(255,255,255,.4);
-        font-family:monospace;
-        font-size:8px;
-        padding:2px 4px;
-        word-break:break-all;
-        max-width:100%;
+      img {
+        max-width:100%; max-height:100%;
+        object-fit:contain;
+        image-rendering:crisp-edges;
       }
     `;
     pipWin.document.head.appendChild(style);
 
-    pipEl = pipWin.document.createElement("div");
-    pipEl.id = "val";
-    pipWin.document.body.appendChild(pipEl);
+    pipImg = pipWin.document.createElement("img");
+    pipWin.document.body.appendChild(pipImg);
 
-    const dbg = pipWin.document.createElement("div");
-    dbg.id = "dbg";
-    pipWin.document.body.appendChild(dbg);
+    await updatePip();
 
-    // mostra info de debug no console
-    if (selectedEl) {
-      console.log("[PiP] tagName:", selectedEl.tagName);
-      console.log("[PiP] className:", selectedEl.className);
-      console.log("[PiP] innerText:", JSON.stringify(selectedEl.innerText));
-      console.log("[PiP] textContent:", JSON.stringify(selectedEl.textContent));
-      console.log("[PiP] innerHTML:", selectedEl.innerHTML.slice(0, 300));
-      console.log("[PiP] attributes:", [...selectedEl.attributes].map(a => `${a.name}="${a.value}"`).join(", "));
-    }
-
-    updatePip();
-
-    updateTimer = setInterval(updatePip, 300);
-
-    if (selectedEl instanceof Node) {
-      observer = new MutationObserver(updatePip);
-      observer.observe(selectedEl, { childList: true, subtree: true, characterData: true });
-    }
-
+    updateTimer = setInterval(updatePip, 500);
     pipWin.addEventListener("pagehide", stopPip);
   }
 
-  function updatePip() {
-    if (!pipEl || !selectedEl) return;
-    const inner = (selectedEl.innerText   || "").trim().replace(/\s+/g, " ");
-    const tc    = (selectedEl.textContent || "").trim().replace(/\s+/g, " ");
-    const text  = inner || tc;
-    pipEl.textContent = text || "—";
-
-    const dbg = pipWin?.document.getElementById("dbg");
-    if (dbg) dbg.textContent = `tag:${selectedEl.tagName} | inner:${JSON.stringify(inner)} | tc:${JSON.stringify(tc)}`;
+  // ── Atualiza imagem no PiP ─────────────────────────────
+  async function updatePip() {
+    if (!pipImg || !selectedEl) return;
+    const dataUrl = await captureElement(selectedEl);
+    if (dataUrl && pipImg) pipImg.src = dataUrl;
   }
 
   // ── Para PiP ───────────────────────────────────────────
   function stopPip() {
     if (updateTimer) { clearInterval(updateTimer); updateTimer = null; }
-    if (observer)    { observer.disconnect(); observer = null; }
     if (pipWin)      { try { pipWin.close(); } catch (_) {} pipWin = null; }
-    pipEl      = null;
+    pipImg     = null;
     selectedEl = null;
   }
 
