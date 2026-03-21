@@ -117,14 +117,15 @@
 
   // ── Inicia Document PiP ────────────────────────────────
   async function startPip() {
-    stopPip();
-
     if (!window.documentPictureInPicture) {
       alert("Seu Chrome não suporta Document PiP. Atualize para a versão 116 ou superior.");
       return;
     }
 
-    const rect = selectedEl.getBoundingClientRect();
+    const el   = selectedEl;
+    const rect = el.getBoundingClientRect();
+    stopPip();
+    selectedEl = el;
     const pipW = Math.max(Math.round(rect.width)  || 220, 120);
     const pipH = Math.max(Math.round(rect.height) || 80,  40);
 
