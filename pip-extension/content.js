@@ -4,9 +4,8 @@
 
   let highlighted  = null;
   let selectedEl   = null;
-  let pipVideo     = null;
-  let pipCanvas    = null;
-  let pipCtx       = null;
+  let pipWin       = null;
+  let pipEl        = null;
   let updateTimer  = null;
   let observer     = null;
   let isSelecting  = false;
@@ -17,11 +16,7 @@
     isSelecting = true;
     document.body.style.cursor = "crosshair";
 
-    // pré-cria e pré-toca o vídeo ANTES do clique do usuário
-    setupVideo();
-
     const banner = document.createElement("div");
-    banner.id = "__pip_banner__";
     banner.style.cssText = `
       position:fixed;top:0;left:0;right:0;z-index:2147483647;
       background:rgba(255,170,0,.95);color:#111;font-family:Arial,sans-serif;
@@ -52,13 +47,11 @@
       e.preventDefault();
       e.stopImmediatePropagation();
 
-      // limpa highlight
       if (highlighted) {
         highlighted.style.outline = highlighted._pipOld ?? "";
         delete highlighted._pipOld;
         highlighted = null;
       }
-
       banner.remove();
       document.body.style.cursor = "";
       isSelecting = false;
@@ -67,20 +60,8 @@
       document.removeEventListener("click",     onClick, true);
       document.removeEventListener("keydown",   onKey,   true);
 
-      // vídeo já está tocando — só precisa chamar requestPictureInPicture
       selectedEl = e.target;
-      renderCanvas();
-
-      pipVideo.requestPictureInPicture()
-        .then(() => {
-          // inicia updates após PiP aberto
-          updateTimer = setInterval(renderCanvas, 300);
-          if (selectedEl instanceof Node) {
-            observer = new MutationObserver(renderCanvas);
-            observer.observe(selectedEl, { childList: true, subtree: true, characterData: true });
-          }
-        })
-        .catch(err => console.error("[Under Pulse PiP]", err.message));
+      startPip();
     }
 
     function onKey(e) {
@@ -93,7 +74,6 @@
         delete highlighted._pipOld;
         highlighted = null;
       }
-      stopPip();
       document.removeEventListener("mouseover", onOver,  true);
       document.removeEventListener("mouseout",  onOut,   true);
       document.removeEventListener("click",     onClick, true);
@@ -106,73 +86,79 @@
     document.addEventListener("keydown",   onKey,   true);
   }
 
-  // ── Pré-cria e toca o vídeo ────────────────────────────
-  function setupVideo() {
-    if (pipVideo && !pipVideo.paused) return; // já está tocando
+  // ── Inicia Document PiP ────────────────────────────────
+  async function startPip() {
+    stopPip();
 
-    pipCanvas        = document.createElement("canvas");
-    pipCanvas.width  = 80;
-    pipCanvas.height = 30;
-    pipCtx = pipCanvas.getContext("2d");
+    if (!window.documentPictureInPicture) {
+      alert("Seu Chrome não suporta Document PiP. Atualize para a versão 116 ou superior.");
+      return;
+    }
 
-    // placeholder inicial
-    pipCtx.fillStyle = "#0f0f0f";
-    pipCtx.fillRect(0, 0, 320, 100);
+    try {
+      pipWin = await window.documentPictureInPicture.requestWindow({
+        width:  200,
+        height: 60
+      });
+    } catch (err) {
+      console.error("[Under Pulse PiP]", err.message);
+      return;
+    }
 
-    pipVideo              = document.createElement("video");
-    pipVideo.srcObject    = pipCanvas.captureStream(15);
-    pipVideo.muted        = true;
-    pipVideo.style.cssText = `
-      position:fixed;top:-2px;left:-2px;
-      width:1px;height:1px;opacity:0.01;pointer-events:none;
+    // estilos da janela PiP
+    const style = pipWin.document.createElement("style");
+    style.textContent = `
+      * { margin:0; padding:0; box-sizing:border-box; }
+      html, body {
+        width:100%; height:100%;
+        background:#0f0f0f;
+        display:flex; align-items:center; justify-content:center;
+        overflow:hidden;
+      }
+      #val {
+        color:#ffaa00;
+        font-family:Arial,sans-serif;
+        font-weight:bold;
+        font-size:10vw;
+        white-space:nowrap;
+        padding:0 6px;
+        border:1px solid rgba(255,170,0,.35);
+        border-radius:4px;
+        max-width:100%;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
     `;
-    document.body.appendChild(pipVideo);
+    pipWin.document.head.appendChild(style);
 
-    pipVideo.play().catch(err => console.warn("[Under Pulse PiP] play():", err.message));
-    pipVideo.addEventListener("leavepictureinpicture", stopPip);
+    pipEl = pipWin.document.createElement("div");
+    pipEl.id = "val";
+    pipWin.document.body.appendChild(pipEl);
+
+    updatePip();
+
+    updateTimer = setInterval(updatePip, 300);
+
+    if (selectedEl instanceof Node) {
+      observer = new MutationObserver(updatePip);
+      observer.observe(selectedEl, { childList: true, subtree: true, characterData: true });
+    }
+
+    pipWin.addEventListener("pagehide", stopPip);
+  }
+
+  function updatePip() {
+    if (!pipEl || !selectedEl) return;
+    pipEl.textContent = (selectedEl.textContent || "").trim().replace(/\s+/g, " ");
   }
 
   // ── Para PiP ───────────────────────────────────────────
   function stopPip() {
     if (updateTimer) { clearInterval(updateTimer); updateTimer = null; }
     if (observer)    { observer.disconnect(); observer = null; }
-    if (pipVideo)    { pipVideo.remove(); pipVideo = null; }
-    if (document.pictureInPictureElement) {
-      document.exitPictureInPicture().catch(() => {});
-    }
-    pipCanvas  = null;
-    pipCtx     = null;
+    if (pipWin)      { try { pipWin.close(); } catch (_) {} pipWin = null; }
+    pipEl      = null;
     selectedEl = null;
-  }
-
-  // ── Renderiza canvas ────────────────────────────────────
-  function renderCanvas() {
-    if (!pipCtx) return;
-    const text = selectedEl
-      ? (selectedEl.textContent || "").trim().replace(/\s+/g, " ")
-      : "";
-    const w = 80, h = 30;
-
-    pipCtx.fillStyle = "#0f0f0f";
-    pipCtx.fillRect(0, 0, w, h);
-
-    pipCtx.strokeStyle = "rgba(255,170,0,.4)";
-    pipCtx.lineWidth   = 2;
-    pipCtx.strokeRect(1, 1, w - 2, h - 2);
-
-    if (!text) return;
-
-    pipCtx.fillStyle    = "#ffaa00";
-    pipCtx.textAlign    = "center";
-    pipCtx.textBaseline = "middle";
-
-    let size = 64;
-    pipCtx.font = `bold ${size}px Arial`;
-    while (pipCtx.measureText(text).width > w - 24 && size > 10) {
-      size -= 2;
-      pipCtx.font = `bold ${size}px Arial`;
-    }
-    pipCtx.fillText(text, w / 2, h / 2);
   }
 
   // ── Mensagens do popup ──────────────────────────────────
