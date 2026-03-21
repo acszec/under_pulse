@@ -126,8 +126,9 @@
     const rect = el.getBoundingClientRect();
     stopPip();
     selectedEl = el;
-    const pipW = Math.max(Math.round(rect.width)  || 220, 120);
-    const pipH = Math.max(Math.round(rect.height) || 80,  40);
+    const SCALE = 2;
+    const pipW  = Math.max(Math.round(rect.width)  || 220, 120) * SCALE;
+    const pipH  = Math.max(Math.round(rect.height) || 80,  40)  * SCALE;
 
     try {
       pipWin = await window.documentPictureInPicture.requestWindow({
