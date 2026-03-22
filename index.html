@@ -14,9 +14,15 @@ body{
   padding:16px 12px 12px;
 }
 h3{ margin:0; font-size:16px; }
+#oddExtensao{
+  font-size:22px;
+  margin-top:12px;
+  color:#aaffcc;
+  letter-spacing:.5px;
+}
 #odd{
   font-size:70px;
-  margin-top:16px;
+  margin-top:4px;
   color:#00ff88;
   line-height:1;
 }
@@ -78,6 +84,7 @@ h3{ margin:0; font-size:16px; }
 
 <h3>Painel Under</h3>
 
+<div id="oddExtensao"></div>
 <div id="odd">--</div>
 <div id="percentual">--</div>
 <div id="media">Média minuto: --</div>
@@ -134,6 +141,10 @@ window.api?.onAtualizarDados((d) => {
 });
 
 window.api?.onErro((msg) => { erroEl.innerText = msg; });
+
+window.api?.onOddExtensao((value) => {
+  document.getElementById("oddExtensao").innerText = value ? "Ext: " + value : "";
+});
 </script>
 
 </body>

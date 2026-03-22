@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld("api", {
 
   onErro: (callback) =>
     ipcRenderer.on("erro", (_event, msg) => callback(msg)),
+
+  onOddExtensao: (callback) =>
+    ipcRenderer.on("odd-extensao", (_event, value) => callback(value)),
 });
 
 // =====================================================

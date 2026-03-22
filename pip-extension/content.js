@@ -86,10 +86,18 @@
   }
 
   // ── Captura screenshot do elemento via background ──────
-  function captureElement(el) {
+  // context: quantas vezes maior que o elemento capturar ao redor (>1 = zoom out)
+  function captureElement(el, context = 2) {
     return new Promise((resolve) => {
       const rect = el.getBoundingClientRect();
       const dpr  = window.devicePixelRatio || 1;
+
+      const padW = rect.width  * (context - 1) / 2;
+      const padH = rect.height * (context - 1) / 2;
+      const cx   = Math.max(0, rect.left - padW);
+      const cy   = Math.max(0, rect.top  - padH);
+      const cw   = rect.width  * context;
+      const ch   = rect.height * context;
 
       chrome.runtime.sendMessage({ action: "captureTab" }, (res) => {
         if (!res?.dataUrl) return resolve(null);
@@ -97,13 +105,13 @@
         const img = new Image();
         img.onload = () => {
           const c   = document.createElement("canvas");
-          c.width   = Math.round(rect.width  * dpr);
-          c.height  = Math.round(rect.height * dpr);
+          c.width   = Math.round(cw * dpr);
+          c.height  = Math.round(ch * dpr);
           const ctx = c.getContext("2d");
           ctx.drawImage(
             img,
-            Math.round(rect.left * dpr),
-            Math.round(rect.top  * dpr),
+            Math.round(cx * dpr),
+            Math.round(cy * dpr),
             c.width, c.height,
             0, 0, c.width, c.height
           );
@@ -166,9 +174,21 @@
     pipWin.addEventListener("pagehide", stopPip);
   }
 
+  // ── Envia valor de texto para o app Electron ──────────
+  function sendOddToApp(el) {
+    const text = (el.innerText || el.textContent || "").trim();
+    if (!text) return;
+    fetch("http://localhost:9999/odd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: text }),
+    }).catch(() => {});
+  }
+
   // ── Atualiza imagem no PiP ─────────────────────────────
   async function updatePip() {
     if (!pipImg || !selectedEl) return;
+    sendOddToApp(selectedEl);
     const dataUrl = await captureElement(selectedEl);
     if (dataUrl && pipImg) pipImg.src = dataUrl;
   }

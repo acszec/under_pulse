@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, Menu, net, session, clipboard } = require("electron");
 const path = require("path");
+const http = require("http");
 
 let painel;
 let laybackWindow;
@@ -650,6 +651,29 @@ function openLaybackLoginWindow() {
   laybackWindow.on("closed", () => (laybackWindow = null));
   return true;
 }
+
+// ── Servidor HTTP local para receber odd da extensão ──
+http.createServer((req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+  if (req.method === "POST" && req.url === "/odd") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { value } = JSON.parse(body);
+        if (painel && !painel.isDestroyed())
+          painel.webContents.send("odd-extensao", value);
+      } catch (_) {}
+      res.writeHead(200);
+      res.end();
+    });
+    return;
+  }
+  res.writeHead(404); res.end();
+}).listen(9999);
 
 app.whenReady().then(() => {
   setupAppMenu();
