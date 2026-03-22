@@ -28,7 +28,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <script>
+    Chart.register(ChartDataLabels);
+
     // 🔹 ODD
     const oddLabels  = [];
     const oddSeries  = [];
@@ -75,17 +78,25 @@
         labels: oddLabels,
         datasets: [
           {
-            label: "Odd",
+            label: "Bolsa",
             data: oddSeries,
             borderColor: "#00ff88",
             backgroundColor: "rgba(0,255,136,0.15)",
             tension: 0.2,
             fill: true,
             pointRadius: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 5 : 0,
-            pointBackgroundColor: "#00ff88"
+            pointBackgroundColor: "#00ff88",
+            datalabels: {
+              display: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1,
+              color: "#00ff88",
+              font: { weight: "bold", size: 13 },
+              anchor: "end",
+              align: "top",
+              formatter: (v) => v != null ? v.toFixed(2) : ""
+            }
           },
           {
-            label: "Odd Ext",
+            label: "Bet365",
             data: oddExtSeries,
             borderColor: "#ffaa00",
             backgroundColor: "rgba(255,170,0,0.10)",
@@ -93,11 +104,25 @@
             fill: false,
             spanGaps: true,
             pointRadius: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 5 : 0,
-            pointBackgroundColor: "#ffaa00"
+            pointBackgroundColor: "#ffaa00",
+            datalabels: {
+              display: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1,
+              color: "#ffaa00",
+              font: { weight: "bold", size: 13 },
+              anchor: "end",
+              align: "bottom",
+              formatter: (v) => v != null ? v.toFixed(2) : ""
+            }
           }
         ]
       },
-      options: baseOptions()
+      options: {
+        ...baseOptions(),
+        plugins: {
+          ...baseOptions().plugins,
+          datalabels: { display: false }
+        }
+      }
     });
 
     const chartPerc = new Chart(cPerc, {
@@ -110,7 +135,8 @@
           borderColor: "#ff4da6",
           backgroundColor: "rgba(255,77,166,0.15)",
           tension: 0.2,
-          fill: true
+          fill: true,
+          datalabels: { display: false }
         }]
       },
       options: baseOptions()
