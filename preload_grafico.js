@@ -11,5 +11,8 @@ contextBridge.exposeInMainWorld("graficoApi", {
     const handler = () => callback();
     ipcRenderer.removeAllListeners("grafico-reset");
     ipcRenderer.on("grafico-reset", handler);
-  }
+  },
+
+  onOddExtensao: (callback) =>
+    ipcRenderer.on("odd-extensao", (_e, value) => callback(value)),
 });

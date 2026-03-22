@@ -666,6 +666,8 @@ http.createServer((req, res) => {
         const { value } = JSON.parse(body);
         if (painel && !painel.isDestroyed())
           painel.webContents.send("odd-extensao", value);
+        if (graficoWindow && !graficoWindow.isDestroyed())
+          graficoWindow.webContents.send("odd-extensao", value);
       } catch (_) {}
       res.writeHead(200);
       res.end();

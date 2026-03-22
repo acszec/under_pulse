@@ -30,8 +30,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     // 🔹 ODD
-    const oddLabels = [];
-    const oddSeries = [];
+    const oddLabels  = [];
+    const oddSeries  = [];
+    const oddExtSeries = [];
+    let lastExtOdd = null;
 
     // 🔹 Percentual (média por minuto)
     const percLabels = [];
@@ -71,14 +73,25 @@
       type: "line",
       data: {
         labels: oddLabels,
-        datasets: [{
-          label: "Odd",
-          data: oddSeries,
-          borderColor: "#00ff88",
-          backgroundColor: "rgba(0,255,136,0.15)",
-          tension: 0.2,
-          fill: true
-        }]
+        datasets: [
+          {
+            label: "Odd",
+            data: oddSeries,
+            borderColor: "#00ff88",
+            backgroundColor: "rgba(0,255,136,0.15)",
+            tension: 0.2,
+            fill: true
+          },
+          {
+            label: "Odd Ext",
+            data: oddExtSeries,
+            borderColor: "#ffaa00",
+            backgroundColor: "rgba(255,170,0,0.10)",
+            tension: 0.2,
+            fill: false,
+            spanGaps: true
+          }
+        ]
       },
       options: baseOptions()
     });
@@ -90,8 +103,8 @@
         datasets: [{
           label: "Percentual (média por minuto)",
           data: percSeries,
-          borderColor: "#ffaa00",
-          backgroundColor: "rgba(255,170,0,0.15)",
+          borderColor: "#ff4da6",
+          backgroundColor: "rgba(255,77,166,0.15)",
           tension: 0.2,
           fill: true
         }]
@@ -102,9 +115,10 @@
     function pushOddPoint(label, odd) {
       oddLabels.push(label);
       oddSeries.push(Number.isFinite(odd) ? odd : null);
+      oddExtSeries.push(lastExtOdd);
 
       const MAX = 240;
-      if (oddLabels.length > MAX) { oddLabels.shift(); oddSeries.shift(); }
+      if (oddLabels.length > MAX) { oddLabels.shift(); oddSeries.shift(); oddExtSeries.shift(); }
       chartOdd.update();
     }
 
@@ -128,9 +142,15 @@
       qtdDoMinuto = 0;
     }
 
+    window.graficoApi.onOddExtensao((value) => {
+      const n = parseFloat(value);
+      lastExtOdd = Number.isFinite(n) ? n : null;
+    });
+
     window.graficoApi.onReset(() => {
-      oddLabels.length = 0; oddSeries.length = 0;
+      oddLabels.length = 0; oddSeries.length = 0; oddExtSeries.length = 0;
       percLabels.length = 0; percSeries.length = 0;
+      lastExtOdd = null;
 
       minutoEmColeta = null;
       somaDoMinuto = 0;
