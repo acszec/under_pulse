@@ -80,7 +80,9 @@
             borderColor: "#00ff88",
             backgroundColor: "rgba(0,255,136,0.15)",
             tension: 0.2,
-            fill: true
+            fill: true,
+            pointRadius: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 5 : 0,
+            pointBackgroundColor: "#00ff88"
           },
           {
             label: "Odd Ext",
@@ -89,7 +91,9 @@
             backgroundColor: "rgba(255,170,0,0.10)",
             tension: 0.2,
             fill: false,
-            spanGaps: true
+            spanGaps: true,
+            pointRadius: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 5 : 0,
+            pointBackgroundColor: "#ffaa00"
           }
         ]
       },
